@@ -1,4 +1,4 @@
-// Field names are short because they match the persisted format (localStorage key `exp-v2`
+// Field names are short because they match the persisted format (browser storage key `exp-v2`
 // and JSON backups). Renaming them would break existing data.
 
 /** 'e' = expense, 'i' = income. */
