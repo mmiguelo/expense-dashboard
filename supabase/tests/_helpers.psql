@@ -1,0 +1,18 @@
+-- Shared by the pgTAP tests (included with \ir). Not a test file itself.
+create extension if not exists pgtap with schema extensions;
+
+-- A user created the way Supabase Auth creates one (fires the real triggers).
+create function pg_temp.new_user(email text, confirmed boolean default true) returns uuid
+language sql as $$
+  insert into auth.users (id, instance_id, aud, role, email, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+  values (gen_random_uuid(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', email,
+          case when confirmed then now() end, '{}', '{}', now(), now())
+  returning id
+$$;
+
+-- Act as a signed-in user: the claims PostgREST sets from the user's JWT. Follow with
+-- `set local role authenticated;`, and `reset role;` to go back to the superuser.
+create function pg_temp.act_as(uid uuid) returns void
+language sql as $$
+  select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true)
+$$;
