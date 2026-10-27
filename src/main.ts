@@ -1,7 +1,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import './styles.css';
 import { readSupabaseConfig } from './config';
-import { LocalStorageRepository } from './storage/localStorageRepository';
+import { LegacyLocalStore } from './storage/legacyLocalStore';
 import { createSupabaseClient } from './storage/supabaseClient';
 import { SupabaseRepository } from './storage/supabaseRepository';
 import { setupAuthScreen, setupRecoveryScreen } from './ui/auth';
@@ -66,12 +66,7 @@ function main(): void {
 
 async function startSignedIn(supabase: SupabaseClient, session: Session): Promise<AppHandle> {
   $('who').textContent = session.user.email ?? '';
-  const repo = new SupabaseRepository(supabase);
-  try {
-    await repo.initialize();
-  } catch (e) {
-    console.error(e);
-  }
+  const repo = new SupabaseRepository(supabase, session.user.id);
   const app = await startApp({ doc: document, repo });
   offerLocalImport(repo, app, session.user.id);
   return app;
@@ -79,24 +74,23 @@ async function startSignedIn(supabase: SupabaseClient, session: Session): Promis
 
 /** Offer to upload data saved in this browser before accounts existed. */
 function offerLocalImport(repo: SupabaseRepository, app: AppHandle, userId: string): void {
-  const local = new LocalStorageRepository();
+  const local = new LegacyLocalStore();
   if (!local.hasData()) return;
 
   const settingsButton = $('localImportSettings');
   settingsButton.hidden = false;
   if (!local.wasImportedBy(userId)) {
-    void local.listTransactions().then((txs) => {
-      $('localImportText').textContent =
-        `This browser has ${txs.length} transaction${txs.length === 1 ? '' : 's'} saved from before you had an account. ` +
-        'Import them into your account to see them on all your devices. Anything already in your account is skipped, so it is safe to do more than once.';
-      $('localImport').hidden = false;
-    });
+    const n = local.transactionCount;
+    $('localImportText').textContent =
+      `This browser has ${n} transaction${n === 1 ? '' : 's'} saved from before you had an account. ` +
+      'Import them into your account to see them on all your devices. Anything already in your account is skipped, so it is safe to do more than once.';
+    $('localImport').hidden = false;
   }
 
   const run = async (button: HTMLElement) => {
     (button as HTMLButtonElement).disabled = true;
     try {
-      const result = await repo.importSnapshot(await local.exportSnapshot(), { replace: false });
+      const result = await repo.importSnapshot(local.snapshot(), { replace: false });
       local.markImportedBy(userId);
       $('localImport').hidden = true;
       await app.refresh();

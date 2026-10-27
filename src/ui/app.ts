@@ -15,7 +15,7 @@ import { shiftRef, toIsoDate } from '../dates';
 import { amountToInput, parseAmount } from '../format';
 import { generateRecurring } from '../recurring';
 import type { Repository } from '../storage/repository';
-import type { Budgets, Categories, GeneratedMonths, LearnedCategories, Mode, RecurringExpense, Transaction, TxType } from '../types';
+import type { Budgets, Categories, GeneratedMonths, KeywordRule, LearnedCategories, Mode, RecurringExpense, Transaction, TxType } from '../types';
 import * as html from './render';
 
 export interface AppOptions {
@@ -39,6 +39,7 @@ interface Data {
   cats: Categories;
   learn: LearnedCategories;
   gen: GeneratedMonths;
+  rules: KeywordRule[];
 }
 
 export async function startApp({ doc, repo, clock = () => new Date() }: AppOptions): Promise<AppHandle> {
@@ -48,7 +49,7 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
   const today = () => toIsoDate(clock());
   const newId = () => crypto.randomUUID();
 
-  let data: Data = { txs: [], rec: [], bud: {}, cats: {}, learn: {}, gen: {} };
+  let data: Data = { txs: [], rec: [], bud: {}, cats: {}, learn: {}, gen: {}, rules: [] };
   let mode: Mode = 'month';
   let ref = today();
   /** The user picked a category by hand, so stop auto-guessing it. */
@@ -58,15 +59,16 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
   let toastTimer: number | undefined;
 
   async function load(): Promise<void> {
-    const [txs, rec, bud, cats, learn, gen] = await Promise.all([
+    const [txs, rec, bud, cats, learn, gen, rules] = await Promise.all([
       repo.listTransactions(),
       repo.listRecurring(),
       repo.getBudgets(),
       repo.getCategories(),
       repo.getLearnedCategories(),
       repo.getGeneratedMonths(),
+      repo.listKeywordRules(),
     ]);
-    data = { txs, rec, bud, cats, learn, gen };
+    data = { txs, rec, bud, cats, learn, gen, rules };
   }
 
   async function generateDueRecurring(): Promise<void> {
@@ -213,7 +215,7 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
   }
 
   $('desc').addEventListener('input', () => {
-    const g = guessCategory($('desc').value, data.learn, data.cats);
+    const g = guessCategory($('desc').value, data.learn, data.rules, data.cats);
     if (g && !touched && sel('type').value === 'e') sel('cat').value = g;
   });
   sel('cat').addEventListener('change', () => (touched = true));

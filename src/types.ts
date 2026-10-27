@@ -54,7 +54,29 @@ export interface RecurringOccurrence {
 
 export type Mode = 'day' | 'month' | 'year';
 
-/** Everything the app stores, in the persisted/backup shape. */
+/**
+ * A description containing `keyword` (lower case, matched against the lower-cased
+ * description padded with spaces) is guessed as `category`. The first matching rule wins.
+ */
+export interface KeywordRule {
+  /** Absent for a rule not saved yet. */
+  id?: number;
+  keyword: string;
+  category: string;
+}
+
+export type Role = 'admin' | 'member';
+
+export interface Profile {
+  id: string;
+  email: string;
+  displayName: string;
+  role: Role;
+  active: boolean;
+  createdAt: string;
+}
+
+/** Everything the app stores, in the backup shape. */
 export interface Snapshot {
   ex: Transaction[];
   rec: RecurringExpense[];
@@ -62,4 +84,6 @@ export interface Snapshot {
   cats: Categories;
   learn: LearnedCategories;
   gen: GeneratedMonths;
+  /** Keyword rules; absent in backups from before accounts had their own. */
+  rules?: KeywordRule[];
 }

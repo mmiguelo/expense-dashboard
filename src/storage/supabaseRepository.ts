@@ -1,11 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { DEFAULT_CATEGORIES } from '../categories';
+import { normalizeKeyword } from '../categories';
 import { generatedKey, parseGeneratedKey } from '../recurring';
 import type {
   Budgets,
   Categories,
   GeneratedMonths,
+  KeywordRule,
   LearnedCategories,
+  Profile,
   RecurringExpense,
   RecurringOccurrence,
   Snapshot,
@@ -65,6 +67,24 @@ export const txToRow = (x: Transaction): TransactionRow => ({
   fixed: !!x.fixed,
 });
 
+export interface ProfileRow {
+  id: string;
+  email: string;
+  display_name: string;
+  role: 'admin' | 'member';
+  active: boolean;
+  created_at: string;
+}
+
+export const profileFromRow = (r: ProfileRow): Profile => ({
+  id: r.id,
+  email: r.email,
+  displayName: r.display_name,
+  role: r.role,
+  active: r.active,
+  createdAt: r.created_at,
+});
+
 export const ruleFromRow = (r: RecurringRow): RecurringExpense => ({
   id: r.id,
   desc: r.description,
@@ -93,6 +113,7 @@ export interface ImportPayload {
   categories?: { name: string; color: string }[];
   budgets?: { category: string; amount: number }[];
   corrections?: { merchant: string; category: string }[];
+  keyword_rules?: { keyword: string; category: string }[];
   recurring?: { source_id: string; description: string; amount: number; category: string; day: number; start_month: string }[];
   occurrences?: { recurring_source_id: string; month: string }[];
   transactions?: (Omit<TransactionRow, 'id'> & { source_id: string })[];
@@ -117,6 +138,10 @@ export function toImportPayload(data: Partial<Snapshot>): ImportPayload {
     p.corrections = Object.entries(data.learn)
       .filter(([merchant, category]) => merchant.trim() && category)
       .map(([merchant, category]) => ({ merchant: text(merchant.toLowerCase()), category }));
+  if (data.rules)
+    p.keyword_rules = data.rules
+      .filter((r) => r && r.keyword && r.category)
+      .map((r) => ({ keyword: text(normalizeKeyword(r.keyword), 100), category: text(r.category, 100) }));
   if (data.rec)
     p.recurring = data.rec
       .filter((r) => r && isAmount(r.amount) && isMonth(r.start) && text(r.desc).trim() && r.day >= 1 && r.day <= 31)
@@ -150,15 +175,20 @@ export function toImportPayload(data: Partial<Snapshot>): ImportPayload {
 }
 
 export class SupabaseRepository implements Repository {
-  constructor(private readonly db: SupabaseClient) {}
+  /** `userId`: the signed-in user. New accounts get their categories from the database. */
+  constructor(
+    private readonly db: SupabaseClient,
+    private readonly userId: string,
+  ) {}
 
-  /** Give a new account the default categories. Safe to call on every start. */
-  async initialize(): Promise<void> {
-    const { count, error } = await this.db.from('categories').select('id', { count: 'exact', head: true });
+  async getProfile(): Promise<Profile> {
+    const { data, error } = await this.db
+      .from('profiles')
+      .select('id, email, display_name, role, active, created_at')
+      .eq('id', this.userId)
+      .single();
     if (error) throw toError(error);
-    if (count) return;
-    const rows = Object.entries(DEFAULT_CATEGORIES).map(([name, color]) => ({ name, color }));
-    check(await this.db.from('categories').upsert(rows, { onConflict: 'user_id,name', ignoreDuplicates: true }));
+    return profileFromRow(data);
   }
 
   /** Every row of a query, fetched a page at a time. */
@@ -244,6 +274,31 @@ export class SupabaseRepository implements Repository {
     check(await this.db.from('categories').upsert({ name, color }, { onConflict: 'user_id,name' }));
   }
 
+  async renameCategory(oldName: string, newName: string): Promise<void> {
+    check(await this.db.rpc('rename_category', { old_name: oldName, new_name: newName }));
+  }
+
+  async deleteCategory(name: string, reassignTo: string | null): Promise<void> {
+    check(await this.db.rpc('delete_category', { category_name: name, reassign_to: reassignTo }));
+  }
+
+  async listKeywordRules(): Promise<KeywordRule[]> {
+    const rows = await this.all<{ id: number; keyword: string; category: string }>((from, to) =>
+      this.db.from('keyword_rules').select('id, keyword, category').order('id').range(from, to),
+    );
+    return rows.map((r) => ({ id: Number(r.id), keyword: r.keyword, category: r.category }));
+  }
+
+  async saveKeywordRule({ id, keyword, category }: KeywordRule): Promise<void> {
+    const row = { keyword: normalizeKeyword(keyword), category };
+    if (id === undefined) check(await this.db.from('keyword_rules').insert(row));
+    else check(await this.db.from('keyword_rules').update(row).eq('id', id));
+  }
+
+  async deleteKeywordRule(id: number): Promise<void> {
+    check(await this.db.from('keyword_rules').delete().eq('id', id));
+  }
+
   async getLearnedCategories(): Promise<LearnedCategories> {
     const rows = await this.all<{ merchant: string; category: string }>((from, to) =>
       this.db.from('category_corrections').select('merchant, category').order('merchant').range(from, to),
@@ -260,15 +315,16 @@ export class SupabaseRepository implements Repository {
   }
 
   async exportSnapshot(): Promise<Snapshot> {
-    const [ex, rec, bud, cats, learn, gen] = await Promise.all([
+    const [ex, rec, bud, cats, learn, gen, rules] = await Promise.all([
       this.listTransactions(),
       this.listRecurring(),
       this.getBudgets(),
       this.getCategories(),
       this.getLearnedCategories(),
       this.getGeneratedMonths(),
+      this.listKeywordRules(),
     ]);
-    return { ex, rec, bud, cats, learn, gen };
+    return { ex, rec, bud, cats, learn, gen, rules: rules.map(({ keyword, category }) => ({ keyword, category })) };
   }
 
   async importSnapshot(data: Partial<Snapshot>, { replace }: { replace: boolean }): Promise<ImportResult> {

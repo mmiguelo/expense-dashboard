@@ -2,7 +2,9 @@ import type {
   Budgets,
   Categories,
   GeneratedMonths,
+  KeywordRule,
   LearnedCategories,
+  Profile,
   RecurringExpense,
   RecurringOccurrence,
   Snapshot,
@@ -17,10 +19,13 @@ export interface ImportResult {
 }
 
 /**
- * All reads and writes of app data go through this interface. Implementations must
- * return copies: callers may mutate what they get without affecting stored data.
+ * All reads and writes of the signed-in user's own data go through this interface.
+ * Implementations must return copies: callers may mutate what they get.
  */
 export interface Repository {
+  /** The signed-in user's account: email, role, whether it is active. */
+  getProfile(): Promise<Profile>;
+
   /** In the order they were added. */
   listTransactions(): Promise<Transaction[]>;
   /** Insert, or replace the transaction with the same id. */
@@ -44,7 +49,21 @@ export interface Repository {
 
   /** In display order. */
   getCategories(): Promise<Categories>;
+  /** Add a category, or change its colour. */
   saveCategory(name: string, color: string): Promise<void>;
+  /** Rename, updating its transactions, recurring expenses, rules and budget. */
+  renameCategory(oldName: string, newName: string): Promise<void>;
+  /**
+   * Delete, moving its transactions, recurring expenses and rules to `reassignTo`.
+   * Fails if it is in use and `reassignTo` is null. Its budget is deleted.
+   */
+  deleteCategory(name: string, reassignTo: string | null): Promise<void>;
+
+  /** In matching order. */
+  listKeywordRules(): Promise<KeywordRule[]>;
+  /** Add (no id) or change a rule. */
+  saveKeywordRule(rule: KeywordRule): Promise<void>;
+  deleteKeywordRule(id: number): Promise<void>;
 
   /** Category the user chose per lower-cased description. */
   getLearnedCategories(): Promise<LearnedCategories>;

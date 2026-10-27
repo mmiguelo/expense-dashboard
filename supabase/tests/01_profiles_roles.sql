@@ -7,6 +7,8 @@ select pg_temp.new_user('alice@test.local') as alice \gset
 select pg_temp.new_user('bob@test.local') as bob \gset
 -- The first admin is made by hand, as in the README (no uid: SQL Editor).
 update public.profiles set role = 'admin' where id = :'admin';
+-- Make it the only admin, whatever else is in the database (undone by the rollback).
+update public.profiles set role = 'member' where role = 'admin' and id <> :'admin';
 
 select results_eq(
   format($$select role, active, display_name from public.profiles where id = %L$$, :'alice'),

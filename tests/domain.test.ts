@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseBackup, toCsv } from '../src/backup';
-import { DEFAULT_CATEGORIES, guessCategory, missingCategories, nextCategoryColor } from '../src/categories';
+import { guessCategory, missingCategories, nextCategoryColor } from '../src/categories';
 import { inPeriod, shiftRef } from '../src/dates';
 import { parseAmount } from '../src/format';
 
@@ -38,19 +38,37 @@ describe('parseAmount', () => {
 });
 
 describe('guessCategory', () => {
+  const cats = { Groceries: '#1', Fuel: '#2', Leisure: '#3', 'Phone & Internet': '#4', Utilities: '#5' };
+  const rules = [
+    { id: 1, keyword: 'pingo doce', category: 'Groceries' },
+    { id: 2, keyword: 'lidl', category: 'Groceries' },
+    { id: 3, keyword: 'galp', category: 'Fuel' },
+    { id: 4, keyword: 'nos ', category: 'Phone & Internet' },
+    { id: 5, keyword: 'gas', category: 'Utilities' },
+    { id: 6, keyword: 'gasolina', category: 'Fuel' },
+  ];
+
   it('prefers what the user picked before for the same description', () => {
-    expect(guessCategory(' Lidl ', { lidl: 'Leisure' }, DEFAULT_CATEGORIES)).toBe('Leisure');
+    expect(guessCategory(' Lidl ', { lidl: 'Leisure' }, rules, cats)).toBe('Leisure');
   });
 
-  it('matches keywords', () => {
-    expect(guessCategory('Pingo Doce Boavista', {}, DEFAULT_CATEGORIES)).toBe('Groceries');
-    expect(guessCategory('Galp A1', {}, DEFAULT_CATEGORIES)).toBe('Fuel');
-    expect(guessCategory('NOS', {}, DEFAULT_CATEGORIES)).toBe('Phone & Internet');
-    expect(guessCategory('something else', {}, DEFAULT_CATEGORIES)).toBeNull();
+  it("matches the account's keyword rules, case-insensitively", () => {
+    expect(guessCategory('Pingo Doce Boavista', {}, rules, cats)).toBe('Groceries');
+    expect(guessCategory('GALP A1', {}, rules, cats)).toBe('Fuel');
+    expect(guessCategory('something else', {}, rules, cats)).toBeNull();
   });
 
-  it('ignores keyword categories that no longer exist', () => {
-    expect(guessCategory('Lidl', {}, { Other: '#000' })).toBeNull();
+  it('matches whole words for keywords ending in a space', () => {
+    expect(guessCategory('NOS', {}, rules, cats)).toBe('Phone & Internet');
+    expect(guessCategory('Nosso café', {}, rules, cats)).toBeNull();
+  });
+
+  it('uses the first rule that matches, in order', () => {
+    expect(guessCategory('Gasolina', {}, rules, cats)).toBe('Utilities');
+  });
+
+  it('ignores rules for categories that no longer exist', () => {
+    expect(guessCategory('Lidl', {}, rules, { Other: '#000' })).toBeNull();
   });
 });
 
@@ -62,8 +80,9 @@ describe('missingCategories', () => {
       Pets: '#c05299',
       Kids: '#7d8f1f',
     });
-    // 13 defaults, so the first custom category gets the 2nd palette colour.
-    expect(nextCategoryColor(DEFAULT_CATEGORIES)).toBe('#c05299');
+    // The suggestion rotates with the number of categories.
+    expect(nextCategoryColor({})).toBe('#0a8f8f');
+    expect(nextCategoryColor({ a: '', b: '', c: '', d: '', e: '', f: '', g: '' })).toBe('#c05299');
   });
 });
 

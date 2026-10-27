@@ -49,6 +49,17 @@ describe('toImportPayload', () => {
     });
   });
 
+  it('includes keyword rules, lower-cased, skipping empty ones', () => {
+    expect(
+      toImportPayload({
+        rules: [
+          { keyword: 'Vet ', category: 'Pets' },
+          { keyword: '', category: 'Pets' },
+        ],
+      }).keyword_rules,
+    ).toEqual([{ keyword: 'vet ', category: 'Pets' }]);
+  });
+
   it('includes only the parts present, so a replace import keeps the rest', () => {
     expect(Object.keys(toImportPayload({ ex: [] }))).toEqual(['transactions']);
   });

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SupabaseRepository } from '../src/storage/supabaseRepository';
+import { confirmEmail, HAVE_DB } from './support/testUsers';
 
 // End-to-end check of the real page (index.html + src/main.ts) in jsdom against a real
 // Supabase, the way a user would use it. Like supabase.integration.test.ts, it needs
@@ -41,20 +42,28 @@ function type(id: string, value: string, event = 'input'): void {
   $(id).dispatchEvent(new Event(event, { bubbles: true }));
 }
 
+/** Create an account, confirm it from the email, then sign in, all as a user would. */
 async function signUpThroughForm(email: string): Promise<void> {
   if ($('authSubmit').textContent !== 'Create account') $('authSwitch').click();
   type('authEmail', email);
   type('authPass', PASSWORD);
   $<HTMLFormElement>('authForm').requestSubmit();
-  await until(() => visible('app') && $<HTMLSelectElement>('cat').options.length > 0, 'dashboard after sign-up');
+  await until(() => $('authMsg').textContent!.includes('confirm'), 'confirm-your-email message');
+  expect(visible('app')).toBe(false);
+  await confirmEmail(email);
+  $('authSwitch').click(); // back to sign in
+  type('authEmail', email);
+  type('authPass', PASSWORD);
+  $<HTMLFormElement>('authForm').requestSubmit();
+  await until(() => visible('app') && $<HTMLSelectElement>('cat').options.length > 0, 'dashboard after sign-in');
 }
 
 const newEmail = () => `ui-${crypto.randomUUID()}@example.test`;
 
 const accountRepo = async (email: string) => {
   const db = createClient(URL!, KEY!, { auth: { persistSession: false } });
-  await db.auth.signInWithPassword({ email, password: PASSWORD });
-  return new SupabaseRepository(db);
+  const { data } = await db.auth.signInWithPassword({ email, password: PASSWORD });
+  return new SupabaseRepository(db, data.user!.id);
 };
 
 afterEach(() => {
@@ -62,7 +71,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe.skipIf(!URL || !KEY)('the page, signed out and signed in', () => {
+describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
   it('signed out: shows only the sign-in screen, with no app data in the page', async () => {
     localStorage.setItem('exp-v2', JSON.stringify({ ex: [{ id: 1, date: '2026-03-01', amount: 5, desc: 'Local secret', cat: 'Fuel', type: 'e' }] }));
     await openPage();
