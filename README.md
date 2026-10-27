@@ -1,135 +1,208 @@
 # Expense Dashboard
 
-A personal expense dashboard: expenses and income, categories with budgets, recurring expenses, comparisons with the previous period, projections, charts and backups. Data is stored in [Supabase](https://supabase.com) behind an email + password account, so it syncs across devices.
+A personal expense dashboard for several people: each account has its own private expenses and income, categories, auto-categorization rules, budgets and recurring expenses, synced across devices. Built on [Supabase](https://supabase.com) (email + password accounts, Postgres with Row Level Security).
 
 Live at **https://mmiguelo.github.io/expense-dashboard/**
 
-Built with [Vite](https://vite.dev) and TypeScript, with no UI framework. Tests use [Vitest](https://vitest.dev).
+Built with [Vite](https://vite.dev) and TypeScript, with no UI framework. Tests use [Vitest](https://vitest.dev) and [pgTAP](https://pgtap.org).
 
-## Your data
+## Accounts and roles
 
-Each user's data lives in their own rows in Postgres. Row Level Security on every table means a signed-in user can only read and change rows where `user_id` is their own id, and signed-out visitors can read nothing. The signed-out screen shows no data.
+- **Anyone can create an account** with email and password. The email must be confirmed before the account can sign in or reach any data.
+- **Every new account is a `member`.** It starts with a copy of the default categories and keyword rules, then they are its own to change.
+- **Admins** get an **Admin** screen with two tabs. **Users** lists accounts (email, name, role, status, created date) and lets admins change roles and deactivate or reactivate accounts. **Defaults** sets the categories, colours and keyword rules that new accounts start with. Admins see account details only. They cannot read anyone's transactions, categories, rules, budgets or recurring expenses: the database doesn't allow it.
+- **Deactivating** an account blocks it immediately, even if it is signed in, and deletes nothing. Reactivating restores everything. Nobody can change their own role or deactivate themselves, and the last active admin can't be demoted, deactivated or deleted.
 
-Data saved in a browser before accounts existed (localStorage keys `exp-v2` and `expenses-v1`) stays in that browser. After signing in, the app offers **Import my existing local data**. It's also under **Settings → Backup**. Importing again, or from a second device with the same data, skips everything already in the account. **Add JSON backup** does the same for an exported backup file, and **Import JSON** replaces your data with the backup.
+### Making the first admin
+
+New accounts are always members, so make yourself admin once, by hand:
+
+1. Create your account on the site and confirm your email.
+2. In the Supabase dashboard, open **SQL Editor**, run this with your email, and check it reports 1 row:
+   ```sql
+   update public.profiles set role = 'admin' where email = 'you@example.com';
+   ```
+3. Reload the site. The account menu now says **Admin**, and the **Admin** tab appears.
+
+After that, make other admins from the Admin screen.
+
+## How the data is protected
+
+Everything is enforced in Postgres, so it holds for any client, not just this app:
+
+- **Row Level Security on every table.** Financial tables (`transactions`, `categories`, `keyword_rules`, `budgets`, `recurring_expenses`, `recurring_occurrences`, `category_corrections`) allow a row only when `user_id = auth.uid()` **and** `is_active_user()`. That second function checks that the account exists, is active and has a confirmed email, so deactivation applies to the very next request. No policy mentions admins, so admins have no extra access to these tables.
+- **`profiles`:** members read only their own row. Admins (`is_admin()`) read and update all rows. A trigger enforces which columns may change: only admins may change `role` or `active`, nobody may change their own, and there must always be one active admin. A lock prevents two admins from demoting each other at the same moment.
+- **`default_categories` and `default_keyword_rules`:** readable by active users, writable by admins.
+- **Signed-out requests** (the public anon key with no login) get no access to anything.
+- **Write limits** stop one account from flooding the database. They are checked once per insert statement:
+
+  | Limit | Value |
+  |---|---|
+  | New rows per account per minute, all tables together | 120 |
+  | Transactions per account | 50,000 |
+  | Generated recurring months | 20,000 |
+  | Learned merchants | 5,000 |
+  | Keyword rules | 2,000 |
+  | Categories, budgets, recurring expenses | 200 each |
+  | Transactions per import | 20,000 |
+
+  Imports and recurring generation don't count towards the per-minute limit, but they stay within the per-table maximums. The limits live in `supabase/migrations/20261028090200_write_limits_and_category_functions.sql`.
+- **No service role key** in the app, the tests, or CI. The browser only ever has the public URL and publishable key.
+
+## Using it
+
+- **Dashboard:** add expenses and income. The description suggests a category from your keyword rules. You also get charts, budgets, comparisons with the previous period and projections.
+- **Settings:**
+  - Categories: add, rename, recolor, or delete, choosing where to move what still uses the category. Renaming or deleting updates transactions, recurring expenses, rules and budgets in one transaction.
+  - Keyword rules, monthly budgets, recurring expenses, and backups (JSON/CSV export, JSON import).
+- **Account menu** (top right): your email and role, and **Log out**.
+- **Old browser data:** data saved in a browser before accounts existed (`exp-v2` / `expenses-v1`) can be imported once with **Import my existing local data**. Importing again skips anything already there.
 
 ## Development
 
 Requires Node.js 22 or later, and Docker for the local Supabase.
 
 ```bash
-npm install        # once, after cloning
-npm run db:start   # local Supabase in Docker, with the migrations applied
-cp .env.example .env.local   # then fill in the values below
-npm run dev        # dev server with live reload at http://localhost:5173
+npm install
+npm run db:start             # local Supabase with all migrations
+cp .env.example .env.local   # VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY from `npx supabase status`
+npm run dev                  # http://localhost:5173
 ```
 
-For the local Supabase, put these in `.env.local`. The values come from `npx supabase status`: `API_URL` and `PUBLISHABLE_KEY`.
-
-```
-VITE_SUPABASE_URL=http://127.0.0.1:54321
-VITE_SUPABASE_ANON_KEY=sb_publishable_...
-```
-
-Locally, accounts don't need email confirmation. Emails (password resets) are caught by Mailpit at http://127.0.0.1:54334.
+Locally, confirmation and password-reset emails go to Mailpit at http://127.0.0.1:54334: open the link there to confirm an account. To get an admin locally, run the SQL above with `docker exec -it supabase_db_expenseDashboard psql -U postgres`.
 
 | Command | What it does |
 | --- | --- |
 | `npm test` | Unit tests (no database needed) |
-| `npm run test:db` | Database, RLS and end-to-end tests; needs `SUPABASE_TEST_URL` and `SUPABASE_TEST_ANON_KEY` (see below) |
+| `npm run test:rls` | pgTAP tests of RLS, roles, deactivation, limits (`supabase/tests/`) |
+| `npm run test:db` | API and end-to-end tests against the local Supabase (needs the variables below) |
+| `npm run check:security` | Plain-HTTP checks of who can see what, against the local Supabase only |
 | `npm run build` | Type-check and build into `dist/` |
-| `npm run preview` | Serve the built `dist/` locally |
-| `npm run db:start` / `db:stop` | Start / stop the local Supabase |
 | `npm run db:reset` | Recreate the local database from the migrations (deletes local data) |
 
 ```bash
-eval "$(npx supabase status -o env | grep -E '^(API_URL|PUBLISHABLE_KEY)=')"
-SUPABASE_TEST_URL=$API_URL SUPABASE_TEST_ANON_KEY=$PUBLISHABLE_KEY npm run test:db
+eval "$(npx supabase status -o env | grep -E '^(API_URL|PUBLISHABLE_KEY|DB_URL)=')"
+SUPABASE_TEST_URL=$API_URL SUPABASE_TEST_ANON_KEY=$PUBLISHABLE_KEY SUPABASE_TEST_DB_URL=$DB_URL npm run test:db
 ```
+
+`supabase/config.toml` only configures the **local** Supabase. Its rate limits are deliberately high, because the tests sign up many users from one IP. The hosted project's settings are made in its dashboard (below).
 
 ### Changing the database
 
-Add a new file to `supabase/migrations/` (`npx supabase migration new <name>`), and never edit one that has already been applied. Test it locally with `npm run db:reset`, then apply it to the hosted project with `npx supabase db push`.
+Add a new migration (`npx supabase migration new <name>`); never edit one that has been applied. Check it with `npm run db:reset` and the tests, then apply it to the hosted project with `npx supabase db push` **before** pushing code that depends on it.
 
 ## Deployment
 
-Pushing to `main` deploys. The workflow in `.github/workflows/deploy.yml`:
+Pushing to `main` deploys (`.github/workflows/deploy.yml`):
 
-1. Starts a throwaway Supabase, applies the migrations, and runs the database and RLS tests.
-2. Runs the unit tests and builds with the `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` repository variables.
-3. Publishes `dist/` to GitHub Pages.
+1. **Database tests:** a throwaway Supabase runs the pgTAP tests, the API and end-to-end tests, and the security check.
+2. **Build:** unit tests, then a build with the `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` repository variables.
+3. **Publish** to GitHub Pages.
 
-If any step fails, or the variables aren't set, nothing is published and the live site stays as it was.
+If anything fails, nothing is published. Migrations are not applied by the workflow; run `npx supabase db push` yourself.
 
-```bash
-git add -A
-git commit -m "Describe your change"
-git push
-gh run watch        # optional: follow the deploy
-```
+## Supabase dashboard settings (hosted project)
 
-Database changes are not deployed by the workflow. Run `npx supabase db push` yourself before pushing code that depends on them.
+These can't be set from the code. Open https://supabase.com/dashboard → your project.
 
-## One-time Supabase setup
+### 1. Require email confirmation
 
-1. **Create a project** at https://supabase.com/dashboard → **New project**. Pick a region near you and save the database password.
-2. **Apply the schema** from this folder:
-   ```bash
-   npx supabase login                               # opens the browser
-   npx supabase link --project-ref <project-ref>    # the ref is in the project URL; asks for the DB password
-   npx supabase db push                             # applies supabase/migrations
-   ```
-   Without the CLI, you can instead paste each file in `supabase/migrations/`, oldest first, into the dashboard's **SQL Editor** and run it.
-3. **Auth URLs**: go to **Authentication → URL Configuration**.
-   - Site URL: `https://mmiguelo.github.io/expense-dashboard/`
-   - Redirect URLs: add `https://mmiguelo.github.io/expense-dashboard/**` and `http://localhost:5173/**`
-4. **Email sign-in**: go to **Authentication → Sign In / Providers → Email**. Keep Email enabled and **Confirm email** on. Set the minimum password length to 8 to match the app. Supabase's built-in email sender only sends a few emails per hour, so for more than personal use, set up custom SMTP under **Authentication → Emails**.
-5. **Keys**: go to **Project Settings → API Keys**. Copy the Project URL and the **publishable** key (or the legacy **anon** key). Never use the secret / service_role key in this app.
-6. **Hosting variables**, so the deployed site can reach Supabase:
-   ```bash
-   gh variable set VITE_SUPABASE_URL --body "https://<project-ref>.supabase.co"
-   gh variable set VITE_SUPABASE_ANON_KEY --body "<publishable or anon key>"
-   ```
-   These are public values: they end up in the JavaScript sent to every visitor, and RLS is what protects the data. That's why they are repository variables rather than secrets.
+**Authentication → Sign In / Providers → Email:**
+- **Enable Email provider:** on.
+- **Confirm email:** on. This is what blocks unconfirmed accounts, and there is no other auto-confirm switch to turn off.
+- **Minimum password length:** 8.
+- **Secure email change:** on.
+
+On the same page, keep **Allow anonymous sign-ins** off. Also check that no other providers are enabled unless you mean to.
+
+### 2. Site URL and redirect URLs
+
+**Authentication → URL Configuration:**
+- **Site URL:** `https://mmiguelo.github.io/expense-dashboard/`
+- **Redirect URLs:** `https://mmiguelo.github.io/expense-dashboard/**` and `http://localhost:5173/**`
+
+### 3. Rate limits
+
+**Authentication → Rate Limits.** The email limit can only be changed once custom SMTP is set up (step 4).
+
+| Setting | Value | Why |
+|---|---|---|
+| Rate limit for sending emails | **30 per hour** | All confirmation, resend and reset emails together, across the project. Enough for family and friends, and it caps the cost of abuse. |
+| Rate limit for sign-ups and sign-ins | **30 per 5 minutes per IP** | A household on one connection never gets near it; a script does. |
+| Rate limit for token verifications | **30 per 5 minutes per IP** | Opening confirmation and reset links. |
+| Rate limit for token refreshes | **150 per 5 minutes per IP** | Keeps sessions alive; leave the default. |
+| Anonymous users, SMS, Web3 | leave as is | Not used. |
+
+**Authentication → Emails → SMTP Settings → Minimum interval per user: 60 seconds.** This is the gap between two emails to the same address, which covers resending the confirmation and password resets. It matches the app's 60-second cooldown on those buttons.
+
+The app also disables its buttons after each attempt, with a countdown: sign in 5 s, create account 30 s, resend and reset 60 s, and 60 s whenever Supabase reports a rate limit.
+
+### 4. Custom SMTP (needed for real users)
+
+Supabase's built-in email sends only a few emails per hour, **and only to addresses of your Supabase organization's team members**. Anyone else never receives their confirmation email. Use an email provider:
+
+1. **Choose a provider and verify a sender.**
+   - **Resend** (resend.com) or **Postmark** (postmarkapp.com) need a domain you own: add it and create the DNS records they show (SPF, DKIM, and ideally DMARC). That's the most reliable option; a domain costs about €10 a year.
+   - **Brevo** (brevo.com) also accepts a single verified sender address without a domain, under **Senders, Domains & Dedicated IPs → Senders**. That works for testing. But a `@gmail.com`, `@hotmail.com` or similar sender sent through Brevo often lands in spam or is rejected by Gmail and Yahoo, because it fails those providers' DMARC checks. Use a domain for real users.
+2. **Get the SMTP credentials:**
+   - Resend: host `smtp.resend.com`, port `465`, user `resend`, password = an API key.
+   - Brevo: **SMTP & API → SMTP**. Host `smtp-relay.brevo.com`, port `587`, login as shown, password = an SMTP key.
+   - Postmark: host `smtp.postmarkapp.com`, port `587`, user and password = a server API token.
+3. **Enter them in Supabase:** **Authentication → Emails → SMTP Settings → Enable custom SMTP**. Fill in the sender email (your verified address or domain), sender name `Expense Dashboard`, host, port, username, password, and minimum interval 60 seconds. Save. The SMTP password stays in Supabase, never in this repository.
+4. **Then raise the email rate limit** to 30 per hour (step 3).
+5. **Test with an address outside your team:**
+   - Sign up on the live site with an email that is **not** a member of your Supabase organization, such as a second personal address or a friend's.
+   - Check that it arrives within a minute (look in spam too), and that the link confirms the account and lets you sign in.
+   - Check the provider's logs (Resend: Emails; Brevo: Transactional → Logs) and Supabase's **Logs → Auth** for errors.
+   - For a deliverability score, sign up with the one-off address shown on https://www.mail-tester.com and open its report. It should show SPF and DKIM passing.
+   - Delete test accounts afterwards: **Authentication → Users**.
+
+### 5. Data API
+
+**Project Settings → Data API:** the Data API is enabled, **Automatically expose new tables** is off (every migration grants access explicitly), and **automatic RLS** is on.
 
 ## Project structure
 
 ```
-index.html                   page markup: sign-in screens and the dashboard
+index.html                      sign-in, deactivated, dashboard, settings and admin screens
 src/
-  main.ts                    entry point: auth state, which screen to show, local data import
-  config.ts                  reads the Supabase URL and key; refuses secret keys
-  styles.css
-  types.ts                   data types
-  categories.ts              default categories, colours, keyword-based category guessing
-  recurring.ts               generating monthly transactions from recurring expenses
-  analytics.ts               totals, budgets, comparisons, projections, chart data
-  backup.ts                  CSV export, JSON backup parsing
-  dates.ts, format.ts        date and number helpers
+  main.ts                       auth state, screens, account menu, local data import
+  config.ts                     reads the Supabase URL and key; refuses secret keys
+  types.ts, dates.ts, format.ts
+  categories.ts                 colours and category guessing (rules come from the database)
+  recurring.ts                  generating monthly transactions from recurring expenses
+  analytics.ts                  totals, budgets, comparisons, projections, chart data
+  backup.ts                     CSV export, JSON backup parsing
   storage/
-    repository.ts            Repository interface: the only way to read or write data
-    supabaseRepository.ts    the Supabase implementation (used when signed in)
-    supabaseClient.ts        Supabase client setup
-    localStorageRepository.ts  reads data saved before accounts, for the one-time import
+    repository.ts               the signed-in user's own data: the only way to read or write it
+    supabaseRepository.ts       its Supabase implementation
+    adminRepository.ts          accounts and defaults (admins only)
+    supabaseAdminRepository.ts  its Supabase implementation
+    supabaseClient.ts           Supabase client setup
+    legacyLocalStore.ts         reads data saved in the browser before accounts, for import
   ui/
-    auth.ts                  sign in, sign up, password reset screens
-    render.ts                HTML for each part of the dashboard
-    app.ts                   dashboard state, events, and wiring
+    auth.ts                     sign in / up, reset, resend, with cooldowns
+    app.ts                      dashboard and settings
+    admin.ts                    admin screen
+    render.ts                   HTML builders
 supabase/
-  config.toml                local Supabase settings
-  migrations/                schema, RLS policies and database functions
-tests/                       Vitest tests (*.integration.test.ts need a database)
-expense-dashboard-v2.html    the original single-file app, kept for reference
+  config.toml                   local Supabase only
+  migrations/                   schema, RLS, functions and limits, in order
+  tests/                        pgTAP tests (npm run test:rls)
+scripts/security-check.sh       plain-HTTP security checks (local only)
+tests/                          Vitest tests (*.integration.test.ts need the local Supabase)
+expense-dashboard-v2.html       the original single-file app, kept for reference
 ```
-
-## How it stays consistent
-
-- **Recurring expenses are generated once per month, even with several devices open.** Each generated month is a row in `recurring_occurrences`, with primary key `(recurring_id, month)`. The `add_recurring_occurrences` function inserts the month and its transaction in one database transaction and skips months that already exist. Deleting a generated expense keeps its month row, so it doesn't come back.
-- **Imports don't create duplicates.** An imported row keeps its original id in `source_id`, and a unique index on `(user_id, coalesce(source_id, id))` makes `import_snapshot` skip rows the account already has. The import runs in a single database transaction, so it either fully succeeds or changes nothing.
 
 ## Tests
 
-- `recurring.test.ts` and `analytics.test.ts` cover the calculations, including month ends (day 31 in a 30-day month, February in leap years).
-- `localStorageRepository.test.ts` covers reading old local data, merge imports, and the rule that only `src/storage` touches localStorage.
-- `supabaseMapping.test.ts` covers row mapping, the import payload, and the config checks.
-- `supabase.integration.test.ts` runs against a real Supabase. It covers the repository, paging, recurring generation from two devices at once, imports, and two users trying to read or change each other's rows.
-- `ui.integration.test.ts` drives the real page in jsdom: signed-out screen, sign-up, adding an expense, the local import, and a second user.
+| What | Where |
+|---|---|
+| A member cannot read or change another member's data | `02_data_access.sql`, `supabase.integration.test.ts`, `ui.integration.test.ts`, `security-check.sh` §1 |
+| A member cannot change roles or read other profiles | `01_profiles_roles.sql`, `supabase.integration.test.ts`, `security-check.sh` §2 |
+| An admin cannot read a member's transactions (or any of their data) | `02_data_access.sql`, `supabase.integration.test.ts`, `security-check.sh` §3 |
+| A deactivated user is locked out of every table, even with a valid session; data kept and restored | `02_data_access.sql`, `supabase.integration.test.ts`, `ui.integration.test.ts`, `security-check.sh` §4 |
+| An unconfirmed user cannot sign in or access data | `02_data_access.sql` (even with a token), `supabase.integration.test.ts`, `ui.integration.test.ts`, `security-check.sh` §5 |
+| The last active admin cannot be demoted, deactivated or deleted | `01_profiles_roles.sql`, `security-check.sh` §6 |
+| Write limits, category rename and delete | `03_limits_and_categories.sql`, `supabase.integration.test.ts` |
+| Calculations (month ends, leap years), recurring generation, imports | `analytics.test.ts`, `recurring.test.ts`, `supabase.integration.test.ts` |

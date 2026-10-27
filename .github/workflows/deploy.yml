@@ -16,8 +16,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Applies the migrations to a throwaway local Supabase and runs the database tests,
-  # including the Row Level Security checks. Nothing deploys if they fail.
+  # Applies the migrations to a throwaway local Supabase and runs the database tests:
+  # RLS and roles (pgTAP), the API and the page end to end, and the HTTP security check.
+  # Nothing deploys if they fail.
   db-tests:
     runs-on: ubuntu-latest
     steps:
@@ -28,10 +29,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run db:start
-      - name: Run database tests
+      - name: Row Level Security and role tests (pgTAP)
+        run: npx supabase test db
+      - name: API and end-to-end tests
         run: |
-          eval "$(npx supabase status -o env | grep -E '^(API_URL|PUBLISHABLE_KEY)=')"
-          SUPABASE_TEST_URL="$API_URL" SUPABASE_TEST_ANON_KEY="$PUBLISHABLE_KEY" npm run test:db
+          eval "$(npx supabase status -o env | grep -E '^(API_URL|PUBLISHABLE_KEY|DB_URL)=')"
+          SUPABASE_TEST_URL="$API_URL" SUPABASE_TEST_ANON_KEY="$PUBLISHABLE_KEY" SUPABASE_TEST_DB_URL="$DB_URL" npm run test:db
+      - name: Security check over plain HTTP
+        run: ./scripts/security-check.sh
 
   build:
     runs-on: ubuntu-latest
