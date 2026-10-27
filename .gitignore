@@ -14,3 +14,7 @@ desktop.ini
 .netlify/
 node_modules/
 .env
+
+# Build output
+dist/
+coverage/
