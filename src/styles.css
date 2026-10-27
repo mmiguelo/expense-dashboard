@@ -25,3 +25,10 @@ small,.mute{color:var(--mute);font-size:13px}.g2{display:grid;grid-template-colu
 .x{border:0;background:transparent;color:var(--mute);padding:4px 6px}.up{color:var(--bad)}.dn{color:var(--ok)}
 .toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;display:none;gap:12px;align-items:center}.toast button{padding:3px 10px}
 details summary{cursor:pointer;font-weight:800}.bg{display:grid;grid-template-columns:1fr 110px;gap:6px 10px;align-items:center}
+.gate{max-width:420px;margin:0 auto;padding:12vh 16px 40px}.gate h1{margin-bottom:6px}.gate p{margin:0 0 14px}
+.stack{display:grid;gap:12px}.stack button{width:100%}
+.authmsg{min-height:1.45em;font-size:13px}.authmsg.err{color:var(--bad)}.authmsg.ok{color:var(--ok)}
+.authlinks{margin:4px 0 0}.link{border:0;background:none;padding:0;color:var(--acc);font-weight:600;font-size:13px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}.top h1{margin:0}
+.who{display:flex;gap:10px;align-items:center;min-width:0}.who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60vw}
+[hidden]{display:none!important}

@@ -2,8 +2,37 @@
 <html lang="en"><head><meta charset="utf-8"><title>Expense Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
-</head><body><main>
+</head><body>
+<div class="gate" id="loading"><p class="mute">Loading…</p></div>
+
+<div class="gate" id="configError" hidden><section class="card"><h1>Expense dashboard</h1><p id="configMsg"></p></section></div>
+
+<div class="gate" id="auth" hidden><section class="card">
 <h1>Expense dashboard</h1>
+<p class="mute" id="authIntro">Sign in to see your expenses on any device.</p>
+<form id="authForm" class="stack" novalidate>
+<label>Email<input type="email" id="authEmail" autocomplete="email" required></label>
+<label id="authPassLabel">Password<input type="password" id="authPass" autocomplete="current-password" minlength="8" required></label>
+<button type="submit" class="pr" id="authSubmit">Sign in</button>
+</form>
+<p class="authmsg" id="authMsg" role="status" aria-live="polite"></p>
+<p class="mute authlinks"><button type="button" class="link" id="authSwitch">Create an account</button> · <button type="button" class="link" id="authForgot">Forgot password?</button></p>
+</section></div>
+
+<div class="gate" id="recovery" hidden><section class="card">
+<h1>Choose a new password</h1>
+<form id="recoveryForm" class="stack" novalidate>
+<label>New password<input type="password" id="newPass" autocomplete="new-password" minlength="8" required></label>
+<button type="submit" class="pr">Save password</button>
+</form>
+<p class="authmsg" id="recoveryMsg" role="status" aria-live="polite"></p>
+</section></div>
+
+<main id="app" hidden>
+<header class="top"><h1>Expense dashboard</h1><div class="who"><span class="mute" id="who"></span><button type="button" id="logout">Log out</button></div></header>
+<section class="card" id="localImport" hidden><h2>Data from before you had an account</h2>
+<p class="mute" id="localImportText"></p>
+<div class="fg"><button type="button" class="pr" id="localImportBtn">Import my existing local data</button><button type="button" id="localImportLater">Not now</button></div></section>
 <section class="card"><h2 id="fT">Add a transaction</h2>
 <div id="f" class="fg">
 <label>Type<select id="type"><option value="e">Expense</option><option value="i">Income</option></select></label>
@@ -33,7 +62,7 @@
 <div id="rf" class="fg"><label>Description<input id="rd" required></label><label>Amount (€)<input id="ra" inputmode="decimal" required></label><label>Category<select id="rc"></select></label><label>Day of month<input id="rday" type="number" min="1" max="31" value="1"></label><button type="button" class="pr" id="rb">Add recurring</button></div>
 <div id="rlist" style="margin-top:8px"></div>
 <h2 style="margin-top:20px">Add a category</h2><div class="fg"><input id="nc" placeholder="e.g. Pets"><button id="ncb">Add category</button></div>
-<h2 style="margin-top:20px">Backup</h2><div class="fg"><button id="xj">Export JSON</button><button id="xc">Export CSV</button><label style="flex-direction:row;align-items:center"><span>Import JSON</span><input type="file" id="imp" accept=".json"></label></div>
-<p class="mute">Data is stored in this browser only. Export a backup regularly.</p></details></section>
+<h2 style="margin-top:20px">Backup</h2><div class="fg"><button id="xj">Export JSON</button><button id="xc">Export CSV</button><label style="flex-direction:row;align-items:center"><span>Import JSON (replaces your data)</span><input type="file" id="imp" accept=".json"></label><label style="flex-direction:row;align-items:center"><span>Add JSON backup (skips duplicates)</span><input type="file" id="impMerge" accept=".json"></label><button type="button" id="localImportSettings" hidden>Import my existing local data</button></div>
+<p class="mute">Your data is saved to your account and synced across your devices. Exporting a backup now and then is still a good idea.</p></details></section>
 </main><div class="toast" id="toast"><span id="tm"></span><button id="undo">Undo</button></div>
 <script type="module" src="/src/main.ts"></script></body></html>

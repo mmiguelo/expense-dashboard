@@ -25,6 +25,13 @@ export interface AppOptions {
   clock?: () => Date;
 }
 
+export interface AppHandle {
+  /** Reload everything from the repository and re-render. */
+  refresh(): Promise<void>;
+  /** Show a short message at the bottom of the screen. */
+  notify(message: string): void;
+}
+
 interface Data {
   txs: Transaction[];
   rec: RecurringExpense[];
@@ -34,7 +41,7 @@ interface Data {
   gen: GeneratedMonths;
 }
 
-export async function startApp({ doc, repo, clock = () => new Date() }: AppOptions): Promise<void> {
+export async function startApp({ doc, repo, clock = () => new Date() }: AppOptions): Promise<AppHandle> {
   const win = doc.defaultView!;
   const $ = <T extends HTMLElement = HTMLInputElement>(id: string) => doc.getElementById(id) as T;
   const sel = (id: string) => $<HTMLSelectElement>(id);
@@ -69,11 +76,35 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
     await load();
   }
 
-  /** Run a change through the repository, then reload and re-render. */
-  async function update(change: () => Promise<unknown>, after: () => Promise<void> | void = render): Promise<void> {
-    await change();
+  /**
+   * Run a change through the repository, then reload and re-render. If it fails (e.g.
+   * offline), say so and show what is actually stored.
+   */
+  async function update(change: () => Promise<unknown>, after: () => Promise<void> | void = render): Promise<boolean> {
+    try {
+      await change();
+    } catch (e) {
+      failed(e);
+      await refresh().catch(() => {});
+      return false;
+    }
+    try {
+      await load();
+      await after();
+    } catch (e) {
+      failed(e);
+    }
+    return true;
+  }
+
+  async function refresh(): Promise<void> {
     await load();
-    await after();
+    await render();
+  }
+
+  function failed(e: unknown): void {
+    console.error(e);
+    toast(`Couldn't save: ${(e as Error)?.message ?? e}. Check your connection and try again.`);
   }
 
   // ---- rendering ----
@@ -150,12 +181,19 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
       if (!existing) return;
       tx = { ...existing, ...fields };
     } else tx = { id: newId(), ...fields };
-    if (type === 'e' && desc && touched) await repo.learnCategory(desc, cat);
-    await repo.saveTransaction(tx);
-    ref = fields.date;
-    resetForm();
-    await load();
-    await render();
+    const learn = type === 'e' && desc && touched;
+    // On failure the form keeps what was typed, so it can be submitted again.
+    await update(
+      async () => {
+        if (learn) await repo.learnCategory(desc, cat);
+        await repo.saveTransaction(tx);
+      },
+      () => {
+        ref = fields.date;
+        resetForm();
+        return render();
+      },
+    );
   }
 
   function startEdit(x: Transaction): void {
@@ -214,8 +252,9 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
 
   // ---- delete with undo ----
 
-  function toast(message: string): void {
+  function toast(message: string, withUndo = false): void {
     $('tm').textContent = message;
+    $('undo').hidden = !withUndo;
     $('toast').style.display = 'flex';
     win.clearTimeout(toastTimer);
     toastTimer = win.setTimeout(() => ($('toast').style.display = 'none'), 6000);
@@ -238,7 +277,7 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
         () => repo.deleteTransaction(x.id),
         async () => {
           await render();
-          toast('Transaction deleted');
+          toast('Transaction deleted', true);
         },
       );
     }
@@ -290,25 +329,46 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
     a.click();
   }
 
-  $('xj').addEventListener('click', async () =>
-    download('expenses-backup.json', JSON.stringify(await repo.exportSnapshot()), 'application/json'),
+  const exporting = (run: () => Promise<void>) => () =>
+    run().catch((e) => toast(`Couldn't export: ${(e as Error)?.message ?? e}`));
+  $('xj').addEventListener(
+    'click',
+    exporting(async () => download('expenses-backup.json', JSON.stringify(await repo.exportSnapshot()), 'application/json')),
   );
-  $('xc').addEventListener('click', async () => download('expenses.csv', toCsv(await repo.listTransactions()), 'text/csv'));
+  $('xc').addEventListener('click', exporting(async () => download('expenses.csv', toCsv(await repo.listTransactions()), 'text/csv')));
+
+  /** Read the backup picked in a file input; alerts and returns null if it isn't one. */
+  async function pickedBackup(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const f = input.files?.[0];
+    if (!f) return null;
+    const backup = parseBackup(await f.text());
+    input.value = '';
+    if (!backup) win.alert('This file is not a valid backup.');
+    return backup;
+  }
 
   $('imp').addEventListener('change', async (e) => {
-    const f = (e.target as HTMLInputElement).files?.[0];
-    if (!f) return;
-    const backup = parseBackup(await f.text());
-    if (!backup) {
-      win.alert('This file is not a valid backup.');
-      return;
-    }
-    if (!win.confirm('Replace current data with this backup?')) return;
+    const backup = await pickedBackup(e);
+    if (!backup || !win.confirm('Replace current data with this backup?')) return;
     await update(
       () => repo.importSnapshot(backup, { replace: true }),
       async () => {
         await render();
         toast('Backup imported');
+      },
+    );
+  });
+
+  $('impMerge').addEventListener('change', async (e) => {
+    const backup = await pickedBackup(e);
+    if (!backup) return;
+    let result = { transactions: 0, skipped: 0 };
+    await update(
+      async () => (result = await repo.importSnapshot(backup, { replace: false })),
+      async () => {
+        await render();
+        toast(importMessage(result));
       },
     );
   });
@@ -319,6 +379,9 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
   await load();
   // Categories used by old data but missing from the list get a colour.
   for (const [name, color] of Object.entries(missingCategories(data.txs, data.cats))) await repo.saveCategory(name, color);
-  await load();
-  await render();
+  await refresh();
+  return { refresh, notify: (m) => toast(m) };
 }
+
+export const importMessage = ({ transactions, skipped }: { transactions: number; skipped: number }): string =>
+  `Imported ${transactions} transaction${transactions === 1 ? '' : 's'}` + (skipped ? ` (${skipped} already there, skipped)` : '');

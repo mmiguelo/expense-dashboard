@@ -6,4 +6,7 @@ import type { SupabaseConfig } from '../config';
  * users stay signed in, and picks up the session from password-reset links.
  */
 export const createSupabaseClient = ({ url, anonKey }: SupabaseConfig): SupabaseClient =>
-  createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  createClient(url, anonKey, {
+    // Implicit flow: a password-reset link works even when opened on another device.
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' },
+  });

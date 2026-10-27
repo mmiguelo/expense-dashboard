@@ -12,7 +12,7 @@
     "db:start": "supabase start -x studio,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,postgres-meta,supavisor",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
-    "test:db": "vitest run tests/supabase.integration.test.ts"
+    "test:db": "vitest run tests/supabase.integration.test.ts tests/ui.integration.test.ts"
   },
   "devDependencies": {
     "@types/jsdom": "^30.0.0",
