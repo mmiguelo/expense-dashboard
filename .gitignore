@@ -18,3 +18,8 @@ node_modules/
 # Build output
 dist/
 coverage/
+
+# Environment files with real values (.env.example is committed)
+.env
+.env.local
+.env.*.local
