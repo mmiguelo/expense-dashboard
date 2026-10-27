@@ -1,13 +1,13 @@
 import { daysInMonth, pad } from './dates';
-import type { GeneratedMonths, RecurringExpense, Transaction } from './types';
+import type { GeneratedMonths, RecurringExpense, RecurringOccurrence } from './types';
 
-export interface GeneratedRecurring {
-  transactions: Transaction[];
-  /** Keys to add to the generated-months record. */
-  keys: string[];
-}
+export const generatedKey = (recurringId: string, month: string): string => recurringId + month;
 
-export const generatedKey = (rule: RecurringExpense, month: string): string => rule.id + month;
+/** Split a generated-months key back into recurring id and YYYY-MM. */
+export const parseGeneratedKey = (key: string): { recurringId: string; month: string } => ({
+  recurringId: key.slice(0, -7),
+  month: key.slice(-7),
+});
 
 /**
  * Create the transactions recurring expenses owe up to and including `today` (YYYY-MM-DD),
@@ -19,22 +19,25 @@ export function generateRecurring(
   rules: RecurringExpense[],
   generated: GeneratedMonths,
   today: string,
-  newId: () => number,
-): GeneratedRecurring {
+  newId: () => string,
+): RecurringOccurrence[] {
   const currentMonth = today.slice(0, 7);
   const done = new Set(Object.keys(generated));
-  const out: GeneratedRecurring = { transactions: [], keys: [] };
+  const out: RecurringOccurrence[] = [];
   for (const r of rules) {
     let [y, m] = r.start.split('-').map(Number) as [number, number];
     for (;;) {
       const month = `${y}-${pad(m)}`;
       if (month > currentMonth) break;
       const date = `${month}-${pad(Math.min(r.day, daysInMonth(y, m)))}`;
-      const key = generatedKey(r, month);
+      const key = generatedKey(r.id, month);
       if (date <= today && !done.has(key)) {
         done.add(key);
-        out.keys.push(key);
-        out.transactions.push({ id: newId(), date, amount: r.amount, desc: r.desc, cat: r.cat, type: 'e', fixed: 1, tags: 'recurring' });
+        out.push({
+          recurringId: r.id,
+          month,
+          transaction: { id: newId(), date, amount: r.amount, desc: r.desc, cat: r.cat, type: 'e', fixed: 1, tags: 'recurring' },
+        });
       }
       m++;
       if (m > 12) {

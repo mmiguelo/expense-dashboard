@@ -1,17 +1,35 @@
 import { DEFAULT_CATEGORIES } from '../categories';
-import type { Budgets, Categories, GeneratedMonths, LearnedCategories, RecurringExpense, Snapshot, Transaction } from '../types';
-import type { Repository } from './repository';
+import { generatedKey } from '../recurring';
+import type {
+  Budgets,
+  Categories,
+  GeneratedMonths,
+  LearnedCategories,
+  RecurringExpense,
+  RecurringOccurrence,
+  Snapshot,
+  Transaction,
+} from '../types';
+import type { ImportResult, Repository } from './repository';
+
+// Data saved in this browser before accounts existed. Signed-in users keep their data in
+// Supabase; this is only read to offer a one-time import into the account.
 
 /** Current key: the whole Snapshot as JSON. */
 export const STORAGE_KEY = 'exp-v2';
 /** First version: a bare array of expenses. Read only if STORAGE_KEY is absent. */
 export const LEGACY_STORAGE_KEY = 'expenses-v1';
+/** Users (ids) who imported this browser's data into their account. */
+const IMPORTED_KEY = 'exp-imported-by';
 
 const clone = <T>(v: T): T => structuredClone(v);
 
+/** Read old data with numeric ids into the current shape. */
+const normalize = (s: Snapshot): Snapshot => ({ ...s, ex: s.ex.map((x) => ({ ...x, id: String(x.id) })) });
+
 /**
  * Keeps the data in memory and writes the whole snapshot back after each change. If the
- * browser blocks storage the app keeps working for the session, as before.
+ * browser blocks storage it keeps working for the session.
  */
 export class LocalStorageRepository implements Repository {
   private state: Snapshot;
@@ -28,9 +46,9 @@ export class LocalStorageRepository implements Repository {
       if (current) s = { ...s, ...JSON.parse(current) };
       else if (legacy) s.ex = JSON.parse(legacy).map((x: Omit<Transaction, 'type'>) => ({ ...x, type: 'e' }));
     } catch {
-      // Unreadable data: start from the defaults, as before.
+      // Unreadable data: start from the defaults.
     }
-    return s;
+    return normalize(s);
   }
 
   private persist(): void {
@@ -38,6 +56,32 @@ export class LocalStorageRepository implements Repository {
       this.storage.setItem(STORAGE_KEY, JSON.stringify(this.state));
     } catch {
       // Quota exceeded or storage blocked: keep the in-memory data.
+    }
+  }
+
+  /** Whether this browser has any transactions or recurring expenses saved. */
+  hasData(): boolean {
+    return this.state.ex.length > 0 || this.state.rec.length > 0;
+  }
+
+  /** Whether `userId` already imported this browser's data. */
+  wasImportedBy(userId: string): boolean {
+    return this.importedBy().includes(userId);
+  }
+
+  markImportedBy(userId: string): void {
+    try {
+      this.storage.setItem(IMPORTED_KEY, JSON.stringify([...new Set([...this.importedBy(), userId])]));
+    } catch {
+      // Storage blocked: the import banner just shows again; importing again adds nothing.
+    }
+  }
+
+  private importedBy(): string[] {
+    try {
+      return JSON.parse(this.storage.getItem(IMPORTED_KEY) || '[]');
+    } catch {
+      return [];
     }
   }
 
@@ -52,7 +96,7 @@ export class LocalStorageRepository implements Repository {
     this.persist();
   }
 
-  async deleteTransaction(id: number): Promise<void> {
+  async deleteTransaction(id: string): Promise<void> {
     this.state.ex = this.state.ex.filter((x) => x.id !== id);
     this.persist();
   }
@@ -77,10 +121,13 @@ export class LocalStorageRepository implements Repository {
     return clone(this.state.gen);
   }
 
-  async addGeneratedRecurring(transactions: Transaction[], keys: string[]): Promise<void> {
-    if (!transactions.length && !keys.length) return;
-    keys.forEach((k) => (this.state.gen[k] = 1));
-    this.state.ex.push(...clone(transactions));
+  async addGeneratedRecurring(occurrences: RecurringOccurrence[]): Promise<void> {
+    const fresh = occurrences.filter((o) => !this.state.gen[generatedKey(o.recurringId, o.month)]);
+    if (!fresh.length) return;
+    for (const o of fresh) {
+      this.state.gen[generatedKey(o.recurringId, o.month)] = 1;
+      this.state.ex.push(clone(o.transaction));
+    }
     this.persist();
   }
 
@@ -116,8 +163,25 @@ export class LocalStorageRepository implements Repository {
     return clone(this.state);
   }
 
-  async importSnapshot(data: Partial<Snapshot>): Promise<void> {
-    this.state = { ...this.state, ...clone(data) };
+  async importSnapshot(data: Partial<Snapshot>, { replace }: { replace: boolean }): Promise<ImportResult> {
+    const incoming = clone(data);
+    const txs = (incoming.ex ?? []).map((x) => ({ ...x, id: String(x.id) }));
+    if (replace) {
+      this.state = { ...this.state, ...incoming, ...(incoming.ex ? { ex: txs } : {}) };
+      this.persist();
+      return { transactions: txs.length, skipped: 0 };
+    }
+    const s = this.state;
+    const known = new Set(s.ex.map((x) => x.id));
+    const added = txs.filter((x) => !known.has(x.id) && known.add(x.id));
+    s.ex.push(...added);
+    const rules = new Set(s.rec.map((r) => r.id));
+    s.rec.push(...(incoming.rec ?? []).filter((r) => !rules.has(r.id) && rules.add(r.id)));
+    s.bud = { ...incoming.bud, ...s.bud };
+    s.cats = { ...s.cats, ...incoming.cats, ...s.cats };
+    s.learn = { ...incoming.learn, ...s.learn };
+    s.gen = { ...s.gen, ...incoming.gen };
     this.persist();
+    return { transactions: added.length, skipped: txs.length - added.length };
   }
 }

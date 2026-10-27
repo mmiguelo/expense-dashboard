@@ -39,14 +39,14 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
   const $ = <T extends HTMLElement = HTMLInputElement>(id: string) => doc.getElementById(id) as T;
   const sel = (id: string) => $<HTMLSelectElement>(id);
   const today = () => toIsoDate(clock());
-  const newId = () => clock().getTime() + Math.random();
+  const newId = () => crypto.randomUUID();
 
   let data: Data = { txs: [], rec: [], bud: {}, cats: {}, learn: {}, gen: {} };
   let mode: Mode = 'month';
   let ref = today();
   /** The user picked a category by hand, so stop auto-guessing it. */
   let touched = false;
-  let editId: number | null = null;
+  let editId: string | null = null;
   let lastDeleted: Transaction | null = null;
   let toastTimer: number | undefined;
 
@@ -63,9 +63,9 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
   }
 
   async function generateDueRecurring(): Promise<void> {
-    const { transactions, keys } = generateRecurring(data.rec, data.gen, today(), newId);
-    if (!keys.length) return;
-    await repo.addGeneratedRecurring(transactions, keys);
+    const due = generateRecurring(data.rec, data.gen, today(), newId);
+    if (!due.length) return;
+    await repo.addGeneratedRecurring(due);
     await load();
   }
 
@@ -265,7 +265,7 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
     const desc = $('rd').value.trim();
     if (!(amount > 0) || !desc) return;
     const rule: RecurringExpense = {
-      id: 'r' + clock().getTime(),
+      id: newId(),
       desc,
       amount,
       cat: sel('rc').value,
@@ -305,7 +305,7 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
     }
     if (!win.confirm('Replace current data with this backup?')) return;
     await update(
-      () => repo.importSnapshot(backup),
+      () => repo.importSnapshot(backup, { replace: true }),
       async () => {
         await render();
         toast('Backup imported');

@@ -5,7 +5,8 @@
 export type TxType = 'e' | 'i';
 
 export interface Transaction {
-  id: number;
+  /** UUID. Data from before accounts has numeric ids, read as strings. */
+  id: string;
   /** Local date, YYYY-MM-DD. */
   date: string;
   amount: number;
@@ -42,6 +43,14 @@ export type LearnedCategories = Record<string, string>;
 
 /** Keys `${recurringId}${YYYY-MM}` of months already generated for a recurring expense. */
 export type GeneratedMonths = Record<string, 1>;
+
+/** A month of a recurring expense and the transaction generated for it. */
+export interface RecurringOccurrence {
+  recurringId: string;
+  /** YYYY-MM */
+  month: string;
+  transaction: Transaction;
+}
 
 export type Mode = 'day' | 'month' | 'year';
 

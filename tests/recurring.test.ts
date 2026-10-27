@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { generateRecurring } from '../src/recurring';
-import type { RecurringExpense } from '../src/types';
+import { generatedKey, generateRecurring, parseGeneratedKey } from '../src/recurring';
+import type { RecurringExpense, RecurringOccurrence } from '../src/types';
 
 const rule = (over: Partial<RecurringExpense> = {}): RecurringExpense => ({
   id: 'r1',
@@ -14,25 +14,21 @@ const rule = (over: Partial<RecurringExpense> = {}): RecurringExpense => ({
 
 const ids = () => {
   let n = 0;
-  return () => ++n;
+  return () => `id-${++n}`;
 };
 
-const dates = (r: ReturnType<typeof generateRecurring>) => r.transactions.map((t) => t.date);
+const dates = (r: RecurringOccurrence[]) => r.map((o) => o.transaction.date);
+const months = (r: RecurringOccurrence[]) => r.map((o) => `${o.recurringId} ${o.month}`);
 
 describe('generateRecurring', () => {
   it('creates one fixed expense per month from the start month up to today', () => {
     const r = generateRecurring([rule({ day: 5 })], {}, '2026-03-10', ids());
     expect(dates(r)).toEqual(['2026-01-05', '2026-02-05', '2026-03-05']);
-    expect(r.keys).toEqual(['r12026-01', 'r12026-02', 'r12026-03']);
-    expect(r.transactions[0]).toEqual({
-      id: 1,
-      date: '2026-01-05',
-      amount: 650,
-      desc: 'Mortgage',
-      cat: 'Mortgage',
-      type: 'e',
-      fixed: 1,
-      tags: 'recurring',
+    expect(months(r)).toEqual(['r1 2026-01', 'r1 2026-02', 'r1 2026-03']);
+    expect(r[0]).toEqual({
+      recurringId: 'r1',
+      month: '2026-01',
+      transaction: { id: 'id-1', date: '2026-01-05', amount: 650, desc: 'Mortgage', cat: 'Mortgage', type: 'e', fixed: 1, tags: 'recurring' },
     });
   });
 
@@ -46,12 +42,11 @@ describe('generateRecurring', () => {
 
   it('skips months already generated, so deleted occurrences stay deleted', () => {
     const r = generateRecurring([rule()], { 'r12026-01': 1, 'r12026-03': 1 }, '2026-03-31', ids());
-    expect(dates(r)).toEqual(['2026-02-01']);
-    expect(r.keys).toEqual(['r12026-02']);
+    expect(months(r)).toEqual(['r1 2026-02']);
   });
 
   it('generates nothing when the start month is in the future', () => {
-    expect(generateRecurring([rule({ start: '2026-04' })], {}, '2026-03-31', ids())).toEqual({ transactions: [], keys: [] });
+    expect(generateRecurring([rule({ start: '2026-04' })], {}, '2026-03-31', ids())).toEqual([]);
   });
 
   it('crosses year boundaries', () => {
@@ -65,7 +60,7 @@ describe('generateRecurring', () => {
 
   it('keeps rules separate and in order', () => {
     const r = generateRecurring([rule({ id: 'a', start: '2026-02' }), rule({ id: 'b', start: '2026-02', day: 2 })], {}, '2026-03-01', ids());
-    expect(r.keys).toEqual(['a2026-02', 'a2026-03', 'b2026-02']);
+    expect(months(r)).toEqual(['a 2026-02', 'a 2026-03', 'b 2026-02']);
   });
 
   describe('month-end clamping', () => {
@@ -96,5 +91,13 @@ describe('generateRecurring', () => {
     const gen = {};
     generateRecurring([rule()], gen, '2026-02-01', ids());
     expect(gen).toEqual({});
+  });
+});
+
+describe('generated-month keys', () => {
+  it('round-trip legacy and UUID recurring ids', () => {
+    for (const id of ['r1773828000000', '0b9c7a2e-8f4e-4b8e-9a51-2f3c4d5e6f70']) {
+      expect(parseGeneratedKey(generatedKey(id, '2026-03'))).toEqual({ recurringId: id, month: '2026-03' });
+    }
   });
 });

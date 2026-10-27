@@ -16,7 +16,7 @@ import type { Transaction } from '../src/types';
 
 let nextId = 1;
 const tx = (date: string, amount: number, over: Partial<Transaction> = {}): Transaction => ({
-  id: nextId++,
+  id: String(nextId++),
   date,
   amount,
   desc: over.cat ?? 'Lidl',
@@ -263,7 +263,7 @@ describe('searchTransactions', () => {
     tx('2026-02-01', 9, { desc: 'Pingo Doce' }),
   ];
 
-  it('returns the period newest first, ties by newest id', () => {
+  it('returns the period newest first; on the same date, the one added last first', () => {
     expect(searchTransactions(txs, '2026-03-10', 'month', '', '').map((x) => x.desc)).toEqual(['Padaria', 'Galp', 'Pingo Doce']);
   });
 

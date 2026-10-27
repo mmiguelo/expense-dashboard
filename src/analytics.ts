@@ -203,18 +203,21 @@ export function frequentExpenses(expenses: Transaction[], limit = 6): QuickPick[
 
 /**
  * Transactions in the period matching the category filter and the search text
- * (description, tags, amount or category), newest first.
+ * (description, tags, amount or category), newest first. `txs` must be in the order
+ * they were added; on the same date the one added last comes first.
  */
 export function searchTransactions(txs: Transaction[], ref: string, mode: Mode, query: string, category: string): Transaction[] {
   const q = query.toLowerCase();
   return txs
+    .map((x, i) => [x, i] as const)
     .filter(
-      (x) =>
+      ([x]) =>
         inPeriod(x.date, ref, mode) &&
         (!category || x.cat === category) &&
         (!q || (x.desc + ' ' + (x.tags || '') + ' ' + x.amount + ' ' + x.cat).toLowerCase().includes(q)),
     )
-    .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+    .sort(([a, i], [b, j]) => b.date.localeCompare(a.date) || j - i)
+    .map(([x]) => x);
 }
 
 export type BudgetStatus = 'none' | 'ok' | 'near' | 'over';

@@ -30,7 +30,7 @@ class MemoryStorage implements Storage {
 }
 
 const tx = (id: number, over: Partial<Transaction> = {}): Transaction => ({
-  id,
+  id: String(id),
   date: '2026-03-01',
   amount: 10,
   desc: 'Lidl',
@@ -64,7 +64,7 @@ describe('LocalStorageRepository', () => {
     const s = new MemoryStorage();
     s.setItem(LEGACY_STORAGE_KEY, JSON.stringify([{ id: 1, date: '2025-01-01', amount: 5, desc: 'Old', cat: 'Fuel' }]));
     const repo = new LocalStorageRepository(s);
-    expect(await repo.listTransactions()).toEqual([{ id: 1, date: '2025-01-01', amount: 5, desc: 'Old', cat: 'Fuel', type: 'e' }]);
+    expect(await repo.listTransactions()).toEqual([{ id: '1', date: '2025-01-01', amount: 5, desc: 'Old', cat: 'Fuel', type: 'e' }]);
     // The old key is left alone; the first change writes the new key.
     await repo.setBudget('Fuel', 50);
     expect(stored(s).ex).toHaveLength(1);
@@ -75,7 +75,7 @@ describe('LocalStorageRepository', () => {
     const s = new MemoryStorage();
     s.setItem(STORAGE_KEY, JSON.stringify({ ex: [tx(2)] }));
     s.setItem(LEGACY_STORAGE_KEY, JSON.stringify([tx(1)]));
-    expect((await new LocalStorageRepository(s).listTransactions()).map((x) => x.id)).toEqual([2]);
+    expect((await new LocalStorageRepository(s).listTransactions()).map((x) => x.id)).toEqual(['2']);
   });
 
   it('falls back to defaults when stored data is corrupt', async () => {
@@ -92,11 +92,11 @@ describe('LocalStorageRepository', () => {
     await repo.setBudget('Gym', 40);
     await repo.saveCategory('Pets', '#c05299');
     await repo.learnCategory('Lidl', 'Leisure');
-    await repo.addGeneratedRecurring([tx(2, { fixed: 1, tags: 'recurring' })], ['r12026-01']);
+    await repo.addGeneratedRecurring([{ recurringId: 'r1', month: '2026-01', transaction: tx(2, { fixed: 1, tags: 'recurring' }) }]);
 
     expect(Object.keys(stored(s))).toEqual(['ex', 'rec', 'bud', 'cats', 'learn', 'gen']);
     const again = new LocalStorageRepository(s);
-    expect((await again.listTransactions()).map((x) => x.id)).toEqual([1, 2]);
+    expect((await again.listTransactions()).map((x) => x.id)).toEqual(['1', '2']);
     expect(await again.listRecurring()).toHaveLength(1);
     expect(await again.getBudgets()).toEqual({ Gym: 40 });
     expect((await again.getCategories()).Pets).toBe('#c05299');
@@ -110,8 +110,8 @@ describe('LocalStorageRepository', () => {
     await repo.saveTransaction(tx(2));
     await repo.saveTransaction(tx(1, { amount: 99 }));
     expect((await repo.listTransactions()).map((x) => [x.id, x.amount])).toEqual([
-      [1, 99],
-      [2, 10],
+      ['1', 99],
+      ['2', 10],
     ]);
   });
 
@@ -119,8 +119,8 @@ describe('LocalStorageRepository', () => {
     const repo = new LocalStorageRepository(new MemoryStorage());
     await repo.saveTransaction(tx(1));
     await repo.saveTransaction(tx(2));
-    await repo.deleteTransaction(1);
-    expect((await repo.listTransactions()).map((x) => x.id)).toEqual([2]);
+    await repo.deleteTransaction('1');
+    expect((await repo.listTransactions()).map((x) => x.id)).toEqual(['2']);
     await repo.saveRecurring({ id: 'r1', desc: 'Gym', amount: 30, cat: 'Gym', day: 1, start: '2026-01' });
     await repo.deleteRecurring('r1');
     expect(await repo.listRecurring()).toEqual([]);
@@ -135,13 +135,61 @@ describe('LocalStorageRepository', () => {
     expect(await repo.getBudgets()).toEqual({});
   });
 
-  it('import replaces the parts in the backup and keeps the rest', async () => {
+  it('reads old numeric ids as strings', async () => {
+    const s = new MemoryStorage();
+    s.setItem(STORAGE_KEY, JSON.stringify({ ex: [{ ...tx(1), id: 1773828000000.123 }] }));
+    expect((await new LocalStorageRepository(s).listTransactions())[0]!.id).toBe('1773828000000.123');
+  });
+
+  it('skips generated months that are already marked', async () => {
+    const repo = new LocalStorageRepository(new MemoryStorage());
+    const occ = { recurringId: 'r1', month: '2026-01', transaction: tx(2) };
+    await repo.addGeneratedRecurring([occ]);
+    await repo.addGeneratedRecurring([{ ...occ, transaction: tx(3) }]);
+    expect((await repo.listTransactions()).map((x) => x.id)).toEqual(['2']);
+  });
+
+  it('import with replace replaces the parts in the backup and keeps the rest', async () => {
     const repo = new LocalStorageRepository(new MemoryStorage());
     await repo.saveTransaction(tx(1));
     await repo.setBudget('Gym', 40);
-    await repo.importSnapshot({ ex: [tx(5)] });
-    expect((await repo.listTransactions()).map((x) => x.id)).toEqual([5]);
+    expect(await repo.importSnapshot({ ex: [tx(5)] }, { replace: true })).toEqual({ transactions: 1, skipped: 0 });
+    expect((await repo.listTransactions()).map((x) => x.id)).toEqual(['5']);
     expect(await repo.getBudgets()).toEqual({ Gym: 40 });
+  });
+
+  it('import without replace merges and skips duplicates, so repeating it adds nothing', async () => {
+    const repo = new LocalStorageRepository(new MemoryStorage());
+    await repo.saveTransaction(tx(1));
+    await repo.setBudget('Gym', 40);
+    await repo.saveCategory('Groceries', '#000000');
+    const backup = {
+      ex: [{ ...tx(1), amount: 999 }, tx(2)],
+      bud: { Gym: 10, Fuel: 20 },
+      cats: { Groceries: '#ffffff', Pets: '#c05299' },
+      rec: [{ id: 'r1', desc: 'Gym', amount: 30, cat: 'Gym', day: 1, start: '2026-01' }],
+      gen: { 'r12026-01': 1 as const },
+    };
+    expect(await repo.importSnapshot(backup, { replace: false })).toEqual({ transactions: 1, skipped: 1 });
+    expect(await repo.importSnapshot(backup, { replace: false })).toEqual({ transactions: 0, skipped: 2 });
+    expect((await repo.listTransactions()).map((x) => [x.id, x.amount])).toEqual([
+      ['1', 10],
+      ['2', 10],
+    ]);
+    expect(await repo.getBudgets()).toEqual({ Gym: 40, Fuel: 20 });
+    const cats = await repo.getCategories();
+    expect([cats.Groceries, cats.Pets]).toEqual(['#000000', '#c05299']);
+    expect(await repo.listRecurring()).toHaveLength(1);
+    expect(await repo.getGeneratedMonths()).toEqual({ 'r12026-01': 1 });
+  });
+
+  it('remembers which users imported its data', () => {
+    const s = new MemoryStorage();
+    const repo = new LocalStorageRepository(s);
+    expect(repo.hasData()).toBe(false);
+    repo.markImportedBy('user-a');
+    expect(new LocalStorageRepository(s).wasImportedBy('user-a')).toBe(true);
+    expect(new LocalStorageRepository(s).wasImportedBy('user-b')).toBe(false);
   });
 
   it('returns copies, so callers cannot change stored data by mutation', async () => {

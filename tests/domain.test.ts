@@ -56,7 +56,7 @@ describe('guessCategory', () => {
 
 describe('missingCategories', () => {
   it('adds categories used by expenses, with rotating palette colours', () => {
-    const tx = (cat: string, type: 'e' | 'i' = 'e') => ({ id: 1, date: '2026-01-01', amount: 1, desc: cat, cat, type });
+    const tx = (cat: string, type: 'e' | 'i' = 'e') => ({ id: '1', date: '2026-01-01', amount: 1, desc: cat, cat, type });
     const cats = { A: '#000' };
     expect(missingCategories([tx('A'), tx('Pets'), tx('Pets'), tx('Kids'), tx('Income', 'i')], cats)).toEqual({
       Pets: '#c05299',
@@ -71,8 +71,8 @@ describe('backup', () => {
   it('exports CSV with quoted descriptions', () => {
     expect(
       toCsv([
-        { id: 1, date: '2026-01-02', amount: 3.5, desc: 'Say "hi"', cat: 'Other', type: 'e', tags: 'a, b', fixed: 1 },
-        { id: 2, date: '2026-01-03', amount: 100, desc: 'Salary', cat: 'Income', type: 'i' },
+        { id: '1', date: '2026-01-02', amount: 3.5, desc: 'Say "hi"', cat: 'Other', type: 'e', tags: 'a, b', fixed: 1 },
+        { id: '2', date: '2026-01-03', amount: 100, desc: 'Salary', cat: 'Income', type: 'i' },
       ]),
     ).toBe('date,type,amount,category,description,tags,fixed\n2026-01-02,expense,3.5,Other,"Say ""hi""","a, b",1\n2026-01-03,income,100,Income,"Salary","",0');
   });
