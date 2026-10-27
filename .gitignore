@@ -1,0 +1,16 @@
+# Windows/WSL download metadata
+*:Zone.Identifier
+*Zone.Identifier
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+
+# Local tooling
+.netlify/
+node_modules/
+.env
