@@ -170,7 +170,7 @@ describe('storage boundary', () => {
         const p = join(dir, e.name);
         if (e.isDirectory()) {
           if (p !== join('src', 'storage')) walk(p);
-        } else if (p !== join('src', 'legacy.js') /* TODO: removed in the UI rewrite */ && /localStorage|sessionStorage/.test(readFileSync(p, 'utf8'))) offenders.push(p);
+        } else if (/\b(localStorage|sessionStorage)\b/.test(readFileSync(p, 'utf8'))) offenders.push(p);
       }
     };
     walk('src');
