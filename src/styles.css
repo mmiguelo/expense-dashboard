@@ -32,3 +32,16 @@ details summary{cursor:pointer;font-weight:800}.bg{display:grid;grid-template-co
 .top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}.top h1{margin:0}
 .who{display:flex;gap:10px;align-items:center;min-width:0}.who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60vw}
 [hidden]{display:none!important}
+.views{margin-left:auto}.views button{padding:7px 14px}
+.acct{position:relative}.acct summary{list-style:none;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.acct summary::-webkit-details-marker{display:none}
+.acctmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:10;background:var(--sf);border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:8px;min-width:220px;box-shadow:0 6px 24px rgba(0,0,0,.12)}
+.acctmenu #acctEmail{font-weight:600;word-break:break-all}
+.badge{display:inline-block;font-size:12px;font-weight:800;padding:2px 8px;border-radius:99px;background:var(--line);color:var(--ink)}.badge.admin{background:var(--acc);color:var(--ai)}.badge.off{background:var(--bad);color:#fff}
+.erow{display:grid;grid-template-columns:44px 1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}.erow:first-child{border-top:0}
+.erow input[type=color],input[type=color]{padding:2px;height:38px;min-width:44px;cursor:pointer}
+.krow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--line)}
+.scrollbox{max-height:420px;overflow:auto;margin-top:6px}
+.danger{color:#fff;background:var(--bad);border-color:var(--bad)}
+.warnbox{border-color:var(--warn);margin:12px 0 0}
+.tablewrap{overflow-x:auto}.grid{width:100%;border-collapse:collapse;font-size:14px}.grid th{text-align:left;color:var(--mute);font-size:12px;font-weight:600;padding:6px}.grid td{border-top:1px solid var(--line);padding:6px;vertical-align:middle}.grid td input,.grid td select{width:100%}
+@media(max-width:700px){.views{margin-left:0;order:3;width:100%}.views button{flex:1}.erow{grid-template-columns:44px 1fr}.erow button{grid-column:span 1}.krow{grid-template-columns:1fr 1fr}}

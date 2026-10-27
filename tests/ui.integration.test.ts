@@ -2,8 +2,12 @@
 import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Real sign-ups with email confirmation take a few seconds.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 import { SupabaseRepository } from '../src/storage/supabaseRepository';
-import { confirmEmail, HAVE_DB } from './support/testUsers';
+import { SupabaseAdminRepository } from '../src/storage/supabaseAdminRepository';
+import { confirmEmail, HAVE_DB, signUp, signUpAdmin, signUpUnconfirmed } from './support/testUsers';
 
 // End-to-end check of the real page (index.html + src/main.ts) in jsdom against a real
 // Supabase, the way a user would use it. Like supabase.integration.test.ts, it needs
@@ -22,7 +26,8 @@ const visible = (id: string) => !$(id).hidden;
 async function until(cond: () => boolean, what: string, ms = 8000): Promise<void> {
   const end = Date.now() + ms;
   while (!cond()) {
-    if (Date.now() > end) throw new Error(`Timed out waiting for: ${what}`);
+    if (Date.now() > end)
+      throw new Error(`Timed out waiting for: ${what} (message: "${$('authMsg')?.textContent}", toast: "${$('tm')?.textContent}")`);
     await new Promise((r) => setTimeout(r, 25));
   }
 }
@@ -30,6 +35,7 @@ async function until(cond: () => boolean, what: string, ms = 8000): Promise<void
 /** Load the page as if (re)opened in the same browser: storage survives, the DOM doesn't. */
 async function openPage(): Promise<void> {
   document.body.innerHTML = BODY;
+  Element.prototype.scrollIntoView = () => {}; // not in jsdom
   vi.resetModules();
   vi.stubEnv('VITE_SUPABASE_URL', URL!);
   vi.stubEnv('VITE_SUPABASE_ANON_KEY', KEY!);
@@ -41,6 +47,15 @@ function type(id: string, value: string, event = 'input'): void {
   $(id).value = value;
   $(id).dispatchEvent(new Event(event, { bubbles: true }));
 }
+
+async function signInThroughForm(email: string, password = PASSWORD): Promise<void> {
+  if ($('authSubmit').textContent !== 'Sign in') $('authSwitch').click();
+  type('authEmail', email);
+  type('authPass', password);
+  $<HTMLFormElement>('authForm').requestSubmit();
+}
+
+const onDashboard = () => visible('app') && $<HTMLSelectElement>('cat').options.length > 0;
 
 /** Create an account, confirm it from the email, then sign in, all as a user would. */
 async function signUpThroughForm(email: string): Promise<void> {
@@ -71,6 +86,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+const openView = (view: string) => (document.querySelector(`#views [data-view="${view}"]`) as HTMLElement).click();
+
 describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
   it('signed out: shows only the sign-in screen, with no app data in the page', async () => {
     localStorage.setItem('exp-v2', JSON.stringify({ ex: [{ id: 1, date: '2026-03-01', amount: 5, desc: 'Local secret', cat: 'Fuel', type: 'e' }] }));
@@ -95,7 +112,7 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     const email = newEmail();
     await openPage();
     await signUpThroughForm(email);
-    expect($('who').textContent).toBe(email);
+    expect($('acctEmail').textContent).toBe(email);
     expect(visible('localImport')).toBe(false);
 
     type('desc', 'Pingo Doce');
@@ -163,5 +180,163 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     await signUpThroughForm(newEmail());
     expect($('list').textContent).not.toContain('Alice only');
     expect($('sum').textContent).toContain('0,00');
+  });
+
+  it('shows the account menu with email and role; members get no Admin screen', async () => {
+    const email = newEmail();
+    await openPage();
+    await signUpThroughForm(email);
+    expect($('acctEmail').textContent).toBe(email);
+    expect($('acctRole').textContent).toBe('Member');
+    expect(visible('adminNav')).toBe(false);
+    expect($('userRows').innerHTML).toBe('');
+  });
+
+  it('settings: add, recolor, rename and delete categories, keeping transactions in step', async () => {
+    await openPage();
+    await signUpThroughForm(newEmail());
+    type('desc', 'Pingo Doce');
+    type('amt', '10');
+    $('sub').click();
+    await until(() => $('list').textContent!.includes('Groceries'), 'expense in Groceries');
+
+    openView('settings');
+    type('nc', 'Pets');
+    type('ncc', '#123456');
+    $('ncb').click();
+    await until(() => !!document.querySelector('[data-cat-name="Pets"]'), 'new category');
+    expect(document.querySelector<HTMLInputElement>('[data-cat-color="Pets"]')!.value).toBe('#123456');
+
+    const color = document.querySelector<HTMLInputElement>('[data-cat-color="Groceries"]')!;
+    color.value = '#ff0000';
+    color.dispatchEvent(new Event('change', { bubbles: true }));
+    await until(() => document.querySelector<HTMLInputElement>('[data-cat-color="Groceries"]')?.value === '#ff0000', 'recolor saved');
+
+    document.querySelector<HTMLInputElement>('[data-cat-name="Groceries"]')!.value = 'Food';
+    (document.querySelector('[data-cat-rename="Groceries"]') as HTMLElement).click();
+    await until(() => $('list').textContent!.includes('Food'), 'renamed in the list');
+    expect($('list').textContent).not.toContain('Groceries');
+
+    (document.querySelector('[data-cat-delete="Food"]') as HTMLElement).click();
+    expect(visible('catDelete')).toBe(true);
+    expect($('catDeleteText').textContent).toContain('used by 1 transaction');
+    $<HTMLSelectElement>('catDeleteTo').value = 'Pets';
+    $('catDeleteOk').click();
+    await until(() => $('list').textContent!.includes('Pets'), 'moved to Pets');
+    expect(document.querySelector('[data-cat-name="Food"]')).toBeNull();
+  });
+
+  it('settings: keyword rules drive the category guess', async () => {
+    await openPage();
+    await signUpThroughForm(newEmail());
+    openView('settings');
+    type('kwNew', 'Vet');
+    $<HTMLSelectElement>('kwNewCat').value = 'Health';
+    $('kwAdd').click();
+    await until(() => $('kwList').textContent!.includes('vet'), 'rule listed');
+    openView('dashboard');
+    type('desc', 'Vet appointment');
+    expect($<HTMLSelectElement>('cat').value).toBe('Health');
+  });
+
+  it('wrong password: a friendly message and a visible cooldown', async () => {
+    await openPage();
+    await signInThroughForm(newEmail(), 'wrong-password');
+    await until(() => $('authMsg').textContent !== '', 'error');
+    expect($('authMsg').textContent).toBe('Wrong email or password.');
+    expect($<HTMLButtonElement>('authSubmit').disabled).toBe(true);
+    expect($('authSubmit').textContent).toMatch(/^Sign in \(\ds\)$/);
+  });
+
+  it('an unconfirmed account cannot sign in, and is offered a new confirmation email', async () => {
+    const { email } = await signUpUnconfirmed();
+    // Supabase allows one email per address per interval (1 s locally, 60 s in production).
+    await new Promise((r) => setTimeout(r, 1500));
+    await openPage();
+    await signInThroughForm(email);
+    await until(() => $('authMsg').textContent !== '', 'error');
+    expect($('authMsg').textContent).toMatch(/Confirm your email first/);
+    expect(visible('authResendRow')).toBe(true);
+    expect(visible('app')).toBe(false);
+    $('authResend').click();
+    await until(() => $('authMsg').textContent!.includes('new confirmation link'), 'resend message');
+    expect($<HTMLButtonElement>('authResend').disabled).toBe(true);
+  });
+
+  it('admin: sees the Admin screen, lists accounts, and cannot change their own role', async () => {
+    const admin = await signUpAdmin();
+    const member = await signUp('listed');
+    await openPage();
+    await signInThroughForm(admin.email);
+    await until(onDashboard, 'dashboard');
+    expect($('acctRole').textContent).toBe('Admin');
+    expect(visible('adminNav')).toBe(true);
+    openView('admin');
+    await until(() => $('userRows').textContent!.includes(member.email), 'member listed');
+    expect(document.querySelector<HTMLSelectElement>(`[data-user-role="${admin.id}"]`)!.disabled).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>(`[data-user-toggle="${admin.id}"]`)!.disabled).toBe(true);
+    // Account info only: the member's expenses are nowhere on the page.
+    expect(document.body.textContent).not.toContain('Member private');
+  });
+
+  it('admin: deactivating locks the member out at once; reactivating restores their data', async () => {
+    const admin = await signUpAdmin();
+    const member = await signUp('locked');
+    await openPage();
+    await signInThroughForm(member.email);
+    await until(onDashboard, 'member dashboard');
+    type('desc', 'Member private');
+    type('amt', '5');
+    $('sub').click();
+    await until(() => $('list').textContent!.includes('Member private'), "member's expense");
+
+    // The admin deactivates the member from another device while the member's page is open.
+    await new SupabaseAdminRepository(admin.db).updateProfile(member.id, { active: false });
+    // Their next change is refused by the database, and the page shows why.
+    type('desc', 'After deactivation');
+    type('amt', '1');
+    $('sub').click();
+    await until(() => visible('deactivated'), 'deactivated screen');
+    expect(visible('app')).toBe(false);
+
+    // Signing in again while deactivated: the deactivated screen, no data.
+    $('deactivatedLogout').click();
+    await until(() => !Object.keys(localStorage).some((k) => k.startsWith('sb-')), 'signed out');
+    await openPage();
+    await signInThroughForm(member.email);
+    await until(() => visible('deactivated'), 'deactivated screen after sign-in');
+    expect($('list').innerHTML).toBe('');
+
+    await new SupabaseAdminRepository(admin.db).updateProfile(member.id, { active: true });
+    await openPage();
+    await until(() => onDashboard() && $('list').textContent!.includes('Member private'), 'data back after reactivation');
+  });
+
+  it('admin: deactivates and reactivates from the Users tab, and edits the defaults', async () => {
+    window.confirm = () => true;
+    const admin = await signUpAdmin();
+    const member = await signUp('toggled');
+    await openPage();
+    await signInThroughForm(admin.email);
+    await until(onDashboard, 'dashboard');
+    openView('admin');
+    await until(() => !!document.querySelector(`[data-user-toggle="${member.id}"]`), 'member row');
+    (document.querySelector(`[data-user-toggle="${member.id}"]`) as HTMLElement).click();
+    await until(() => document.querySelector(`[data-user-toggle="${member.id}"]`)?.textContent === 'Reactivate', 'deactivated');
+    (document.querySelector(`[data-user-toggle="${member.id}"]`) as HTMLElement).click();
+    await until(() => document.querySelector(`[data-user-toggle="${member.id}"]`)?.textContent === 'Deactivate', 'reactivated');
+
+    (document.querySelector('#adminTabs [data-tab="defaults"]') as HTMLElement).click();
+    expect(visible('adminDefaults')).toBe(true);
+    const name = `Hobbies ${crypto.randomUUID().slice(0, 4)}`;
+    type('dcName', name);
+    $('dcAdd').click();
+    await until(() => $('defCatList').innerHTML.includes(name), 'default category added');
+    const newcomer = await signUp('newcomer');
+    const { data } = await newcomer.db.from('categories').select('name').eq('name', name);
+    expect(data).toEqual([{ name }]);
+    // Leave the defaults as they were.
+    const repo = new SupabaseAdminRepository(admin.db);
+    await repo.deleteDefaultCategory((await repo.listDefaultCategories()).find((c) => c.name === name)!.id!);
   });
 });

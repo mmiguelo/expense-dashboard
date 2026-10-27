@@ -34,7 +34,7 @@ reset role;
 -- ---- maximum rows per table (200 categories), also from the SQL Editor ----
 select pg_temp.act_as(null);
 select lives_ok(format($$insert into public.categories (user_id, name, color)
-  select %L, 'Extra ' || i, '#000000' from generate_series(1, 200 - 13) i$$, :'bob'), 'up to 200 categories');
+  select %1$L, 'Extra ' || i, '#000000' from generate_series(1, 200 - (select count(*) from public.categories where user_id = %1$L)) i$$, :'bob'), 'up to 200 categories');
 select throws_like(format($$insert into public.categories (user_id, name, color) values (%L, 'One too many', '#000000')$$, :'bob'),
   'Limit reached: an account can have at most 200 rows in categories%', 'the 201st category is refused');
 

@@ -1,4 +1,7 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+// Real sign-ups with email confirmation take a few seconds.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 import { generateRecurring } from '../src/recurring';
 import { SupabaseAdminRepository } from '../src/storage/supabaseAdminRepository';
 import { SupabaseRepository } from '../src/storage/supabaseRepository';

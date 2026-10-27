@@ -2,9 +2,11 @@ import type { CategoryRow, Change, HeatmapDay, Merchant, PeriodSummary, QuickPic
 import { categoryColor, INCOME_CATEGORY } from '../categories';
 import { formatDmy, MONTH_NAMES, parseIsoDate } from '../dates';
 import { escapeHtml as esc, formatEur as eur } from '../format';
-import type { Budgets, Categories, Mode, RecurringExpense, Transaction } from '../types';
+import type { Budgets, Categories, KeywordRule, Mode, RecurringExpense, Transaction } from '../types';
 
-// Pure HTML builders. Markup is kept identical to the original single-file app.
+// Pure HTML builders. Dashboard markup is kept identical to the original single-file app.
+
+export const escape = esc;
 
 export function periodLabel(ref: string, mode: Mode): string {
   const [y, m, d] = parseIsoDate(ref);
@@ -114,3 +116,27 @@ export const recurringListHtml = (rules: RecurringExpense[], cats: Categories): 
         )
         .join('')
     : '<div class="mute">No recurring expenses yet. Add your mortgage, insurance or gym once.</div>';
+
+// ---- Settings ----
+
+export const categoryEditorHtml = (cats: Categories, usage: Record<string, number>): string =>
+  Object.entries(cats)
+    .map(([name, color]) => {
+      const n = usage[name] || 0;
+      return `<div class="erow" data-cat-row="${esc(name)}"><input type="color" value="${esc(color)}" data-cat-color="${esc(name)}" aria-label="Colour of ${esc(name)}"><input value="${esc(name)}" data-cat-name="${esc(name)}" maxlength="100" aria-label="Name"><button type="button" data-cat-rename="${esc(name)}">Rename</button><button type="button" class="x" data-cat-delete="${esc(name)}" aria-label="Delete ${esc(name)}" title="${n} transaction${n === 1 ? '' : 's'}">✕</button></div>`;
+    })
+    .join('') || '<div class="mute">No categories yet.</div>';
+
+export function keywordRulesHtml(rules: KeywordRule[], cats: Categories, filter: string): string {
+  const f = filter.toLowerCase().trim();
+  const shown = rules.filter((r) => !f || r.keyword.includes(f) || r.category.toLowerCase().includes(f));
+  if (!shown.length) return `<div class="mute">${rules.length ? 'No rules match.' : 'No rules yet.'}</div>`;
+  return shown
+    .map((r) => {
+      const options = [...new Set([...Object.keys(cats), r.category])]
+        .map((c) => `<option${c === r.category ? ' selected' : ''}>${esc(c)}</option>`)
+        .join('');
+      return `<div class="krow"><code>${esc(r.keyword.replace(/ /g, '␣'))}</code><select data-rule-cat="${r.id}" aria-label="Category for ${esc(r.keyword)}">${options}</select><button type="button" class="x" data-rule-delete="${r.id}" aria-label="Delete rule ${esc(r.keyword)}">✕</button></div>`;
+    })
+    .join('');
+}

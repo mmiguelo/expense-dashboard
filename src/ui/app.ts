@@ -23,6 +23,8 @@ export interface AppOptions {
   repo: Repository;
   /** Current time; injectable for tests. */
   clock?: () => Date;
+  /** Called when a reload finds the account deactivated. */
+  onDeactivated?: () => void;
 }
 
 export interface AppHandle {
@@ -42,7 +44,7 @@ interface Data {
   rules: KeywordRule[];
 }
 
-export async function startApp({ doc, repo, clock = () => new Date() }: AppOptions): Promise<AppHandle> {
+export async function startApp({ doc, repo, clock = () => new Date(), onDeactivated }: AppOptions): Promise<AppHandle> {
   const win = doc.defaultView!;
   const $ = <T extends HTMLElement = HTMLInputElement>(id: string) => doc.getElementById(id) as T;
   const sel = (id: string) => $<HTMLSelectElement>(id);
@@ -57,9 +59,12 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
   let editId: string | null = null;
   let lastDeleted: Transaction | null = null;
   let toastTimer: number | undefined;
+  /** Category waiting for confirmation in the delete panel. */
+  let deleting: string | null = null;
 
   async function load(): Promise<void> {
-    const [txs, rec, bud, cats, learn, gen, rules] = await Promise.all([
+    const [profile, txs, rec, bud, cats, learn, gen, rules] = await Promise.all([
+      repo.getProfile(),
       repo.listTransactions(),
       repo.listRecurring(),
       repo.getBudgets(),
@@ -68,6 +73,11 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
       repo.getGeneratedMonths(),
       repo.listKeywordRules(),
     ]);
+    if (!profile.active) {
+      // The database already returns nothing; show why.
+      onDeactivated?.();
+      throw new Error('Your account has been deactivated.');
+    }
     data = { txs, rec, bud, cats, learn, gen, rules };
   }
 
@@ -112,11 +122,12 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
   // ---- rendering ----
 
   function fillSelects(): void {
-    const selects = [sel('cat'), sel('fc'), sel('rc')];
+    const selects = [sel('cat'), sel('fc'), sel('rc'), sel('kwNewCat')];
     const values = selects.map((s) => s.value);
     selects[0]!.innerHTML = html.categoryOptions(data.cats);
     selects[1]!.innerHTML = html.categoryOptions(data.cats, true, true);
     selects[2]!.innerHTML = html.categoryOptions(data.cats);
+    selects[3]!.innerHTML = html.categoryOptions(data.cats);
     selects.forEach((s, i) => {
       if (values[i]) s.value = values[i]!;
     });
@@ -136,6 +147,19 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
       }),
     );
     $('rlist').innerHTML = html.recurringListHtml(data.rec, data.cats);
+    $('catList').innerHTML = html.categoryEditorHtml(data.cats, categoryUsage());
+    renderRules();
+    if (deleting && !data.cats[deleting]) closeDeletePanel();
+  }
+
+  const renderRules = () => ($('kwList').innerHTML = html.keywordRulesHtml(data.rules, data.cats, $('kwFilter').value));
+
+  /** Expenses and recurring expenses per category. */
+  function categoryUsage(): Record<string, number> {
+    const n: Record<string, number> = {};
+    for (const x of data.txs) if (x.type === 'e') n[x.cat] = (n[x.cat] || 0) + 1;
+    for (const r of data.rec) n[r.cat] = (n[r.cat] || 0) + 1;
+    return n;
   }
 
   async function render(): Promise<void> {
@@ -317,11 +341,92 @@ export async function startApp({ doc, repo, clock = () => new Date() }: AppOptio
     void update(() => repo.saveRecurring(rule));
   });
 
+  // ---- settings: categories and keyword rules ----
+
   $('ncb').addEventListener('click', () => {
     const name = $('nc').value.trim();
-    if (!name || data.cats[name]) return;
+    if (!name) return;
+    if (data.cats[name] || name === INCOME_CATEGORY) return toast(`There is already a category called "${name}".`);
     $('nc').value = '';
-    void update(() => repo.saveCategory(name, nextCategoryColor(data.cats)));
+    const color = $('ncc').value;
+    $('ncc').value = nextCategoryColor({ ...data.cats, [name]: color });
+    void update(() => repo.saveCategory(name, color));
+  });
+
+  function closeDeletePanel(): void {
+    deleting = null;
+    $('catDelete').hidden = true;
+  }
+
+  function openDeletePanel(name: string): void {
+    deleting = name;
+    const n = categoryUsage()[name] || 0;
+    const others = Object.keys(data.cats).filter((c) => c !== name);
+    $('catDeleteText').textContent = n
+      ? `"${name}" is used by ${n} transaction${n === 1 ? '' : 's'} or recurring expense${n === 1 ? '' : 's'}. Choose where to move them, then delete.`
+      : `Delete "${name}"? Its keyword rules and budget are deleted too.`;
+    $('catDeleteMoveLabel').hidden = !n;
+    sel('catDeleteTo').innerHTML = others.map((c) => `<option>${html.escape(c)}</option>`).join('');
+    $<HTMLButtonElement>('catDeleteOk').disabled = n > 0 && !others.length;
+    $('catDelete').hidden = false;
+    $('catDelete').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  $('catDeleteCancel').addEventListener('click', closeDeletePanel);
+  $('catDeleteOk').addEventListener('click', () => {
+    const name = deleting;
+    if (!name) return;
+    const moveTo = (categoryUsage()[name] || 0) > 0 ? sel('catDeleteTo').value : null;
+    void update(
+      () => repo.deleteCategory(name, moveTo),
+      async () => {
+        closeDeletePanel();
+        await render();
+        toast(moveTo ? `Deleted "${name}" and moved its entries to "${moveTo}"` : `Deleted "${name}"`);
+      },
+    );
+  });
+
+  $('catList').addEventListener('change', (e) => {
+    const t = e.target as HTMLInputElement;
+    if (t.dataset.catColor) void update(() => repo.saveCategory(t.dataset.catColor!, t.value));
+  });
+
+  $('catList').addEventListener('click', (e) => {
+    const t = e.target as HTMLElement;
+    if (t.dataset.catDelete) openDeletePanel(t.dataset.catDelete);
+    if (t.dataset.catRename) {
+      const old = t.dataset.catRename;
+      const input = [...doc.querySelectorAll<HTMLInputElement>('[data-cat-name]')].find((i) => i.dataset.catName === old)!;
+      const name = input.value.trim();
+      if (!name || name === old) return;
+      if (data.cats[name] || name === INCOME_CATEGORY) return toast(`There is already a category called "${name}".`);
+      void update(
+        () => repo.renameCategory(old, name),
+        async () => {
+          await render();
+          toast(`Renamed "${old}" to "${name}"`);
+        },
+      );
+    }
+  });
+
+  $('kwAdd').addEventListener('click', () => {
+    const keyword = $('kwNew').value.toLowerCase();
+    if (!keyword.trim()) return;
+    if (data.rules.some((r) => r.keyword === keyword)) return toast(`There is already a rule for "${keyword}".`);
+    $('kwNew').value = '';
+    void update(() => repo.saveKeywordRule({ keyword, category: sel('kwNewCat').value }));
+  });
+  $('kwFilter').addEventListener('input', renderRules);
+  $('kwList').addEventListener('change', (e) => {
+    const t = e.target as HTMLSelectElement;
+    const rule = data.rules.find((r) => String(r.id) === t.dataset.ruleCat);
+    if (rule) void update(() => repo.saveKeywordRule({ ...rule, category: t.value }));
+  });
+  $('kwList').addEventListener('click', (e) => {
+    const id = (e.target as HTMLElement).dataset.ruleDelete;
+    if (id) void update(() => repo.deleteKeywordRule(Number(id)));
   });
 
   function download(name: string, text: string, type: string): void {

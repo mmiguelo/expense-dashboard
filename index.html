@@ -16,6 +16,7 @@
 <button type="submit" class="pr" id="authSubmit">Sign in</button>
 </form>
 <p class="authmsg" id="authMsg" role="status" aria-live="polite"></p>
+<p class="authlinks" id="authResendRow" hidden><button type="button" id="authResend">Resend confirmation email</button></p>
 <p class="mute authlinks"><button type="button" class="link" id="authSwitch">Create an account</button> · <button type="button" class="link" id="authForgot">Forgot password?</button></p>
 </section></div>
 
@@ -28,11 +29,23 @@
 <p class="authmsg" id="recoveryMsg" role="status" aria-live="polite"></p>
 </section></div>
 
+<div class="gate" id="deactivated" hidden><section class="card">
+<h1>Your account has been deactivated</h1>
+<p>You can't use the dashboard right now. Your data has not been deleted: if an administrator reactivates your account, everything will be as you left it.</p>
+<p class="mute" id="deactivatedWho"></p>
+<button type="button" id="deactivatedLogout">Log out</button>
+</section></div>
+
 <main id="app" hidden>
-<header class="top"><h1>Expense dashboard</h1><div class="who"><span class="mute" id="who"></span><button type="button" id="logout">Log out</button></div></header>
+<header class="top"><h1>Expense dashboard</h1>
+<nav class="seg views" id="views" aria-label="Screens"><button type="button" data-view="dashboard" class="on">Dashboard</button><button type="button" data-view="settings">Settings</button><button type="button" data-view="admin" id="adminNav" hidden>Admin</button></nav>
+<details class="acct" id="acct"><summary aria-label="Account"><span id="who"></span></summary>
+<div class="acctmenu"><div class="mute">Signed in as</div><div id="acctEmail"></div><div><span class="badge" id="acctRole"></span></div><button type="button" id="logout">Log out</button></div></details>
+</header>
 <section class="card" id="localImport" hidden><h2>Data from before you had an account</h2>
 <p class="mute" id="localImportText"></p>
 <div class="fg"><button type="button" class="pr" id="localImportBtn">Import my existing local data</button><button type="button" id="localImportLater">Not now</button></div></section>
+<div id="viewDashboard">
 <section class="card"><h2 id="fT">Add a transaction</h2>
 <div id="f" class="fg">
 <label>Type<select id="type"><option value="e">Expense</option><option value="i">Income</option></select></label>
@@ -56,13 +69,49 @@
 <section class="card"><h2>Transactions</h2>
 <div class="fg" style="margin-bottom:8px"><input id="q" placeholder="Search text, tags, amount…"><select id="fc"></select></div><div id="list"></div></section>
 
-<section class="card"><details><summary>Settings: budgets, recurring, categories, backup</summary>
-<h2 style="margin-top:16px">Monthly budget per category (€, empty = none)</h2><div class="bg" id="bud"></div>
-<h2 style="margin-top:20px">Recurring monthly expenses</h2>
+</div>
+
+<div id="viewSettings" hidden>
+<section class="card"><h2>Categories</h2>
+<p class="mute">Renaming or deleting a category updates your transactions, recurring expenses, rules and budgets.</p>
+<div id="catList"></div>
+<div class="fg" style="margin-top:10px"><label>New category<input id="nc" placeholder="e.g. Pets" maxlength="100"></label><label>Colour<input type="color" id="ncc" value="#0a8f8f"></label><button type="button" id="ncb">Add category</button></div>
+<div class="card warnbox" id="catDelete" hidden><p id="catDeleteText"></p>
+<div class="fg"><label id="catDeleteMoveLabel">Move them to<select id="catDeleteTo"></select></label><button type="button" class="danger" id="catDeleteOk">Delete</button><button type="button" id="catDeleteCancel">Cancel</button></div></div>
+</section>
+
+<section class="card"><h2>Auto-categorization rules</h2>
+<p class="mute">When a description contains the keyword, that category is suggested. The first matching rule wins. End a keyword with a space to match only whole words.</p>
+<div class="fg"><label>Keyword<input id="kwNew" placeholder="e.g. vet" maxlength="100"></label><label>Category<select id="kwNewCat"></select></label><button type="button" id="kwAdd">Add rule</button></div>
+<div class="fg" style="margin-top:8px"><input id="kwFilter" placeholder="Filter rules…"></div>
+<div id="kwList" class="scrollbox"></div>
+</section>
+
+<section class="card"><h2>Monthly budget per category (€, empty = none)</h2><div class="bg" id="bud"></div></section>
+
+<section class="card"><h2>Recurring monthly expenses</h2>
 <div id="rf" class="fg"><label>Description<input id="rd" required></label><label>Amount (€)<input id="ra" inputmode="decimal" required></label><label>Category<select id="rc"></select></label><label>Day of month<input id="rday" type="number" min="1" max="31" value="1"></label><button type="button" class="pr" id="rb">Add recurring</button></div>
-<div id="rlist" style="margin-top:8px"></div>
-<h2 style="margin-top:20px">Add a category</h2><div class="fg"><input id="nc" placeholder="e.g. Pets"><button id="ncb">Add category</button></div>
-<h2 style="margin-top:20px">Backup</h2><div class="fg"><button id="xj">Export JSON</button><button id="xc">Export CSV</button><label style="flex-direction:row;align-items:center"><span>Import JSON (replaces your data)</span><input type="file" id="imp" accept=".json"></label><label style="flex-direction:row;align-items:center"><span>Add JSON backup (skips duplicates)</span><input type="file" id="impMerge" accept=".json"></label><button type="button" id="localImportSettings" hidden>Import my existing local data</button></div>
-<p class="mute">Your data is saved to your account and synced across your devices. Exporting a backup now and then is still a good idea.</p></details></section>
+<div id="rlist" style="margin-top:8px"></div></section>
+
+<section class="card"><h2>Backup</h2><div class="fg"><button id="xj">Export JSON</button><button id="xc">Export CSV</button><label style="flex-direction:row;align-items:center"><span>Import JSON (replaces your data)</span><input type="file" id="imp" accept=".json"></label><label style="flex-direction:row;align-items:center"><span>Add JSON backup (skips duplicates)</span><input type="file" id="impMerge" accept=".json"></label><button type="button" id="localImportSettings" hidden>Import my existing local data</button></div>
+<p class="mute">Your data is saved to your account and synced across your devices. Exporting a backup now and then is still a good idea.</p></section>
+</div>
+
+<div id="viewAdmin" hidden>
+<div class="seg" id="adminTabs" style="margin-bottom:14px;width:max-content"><button type="button" data-tab="users" class="on">Users</button><button type="button" data-tab="defaults">Defaults</button></div>
+<section class="card" id="adminUsers"><h2>Accounts</h2>
+<p class="mute">You see account details only, never anyone's expenses. Deactivating blocks the account immediately and keeps its data; reactivating restores it.</p>
+<div class="tablewrap"><table class="grid"><thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div></section>
+<div id="adminDefaults" hidden>
+<section class="card"><h2>Default categories</h2>
+<p class="mute">New accounts start with these. Changes don't affect existing accounts.</p>
+<div id="defCatList"></div>
+<div class="fg" style="margin-top:10px"><label>New category<input id="dcName" maxlength="100"></label><label>Colour<input type="color" id="dcColor" value="#0a8f8f"></label><button type="button" id="dcAdd">Add default category</button></div></section>
+<section class="card"><h2>Default auto-categorization rules</h2>
+<div class="fg"><label>Keyword<input id="dkKeyword" maxlength="100"></label><label>Category<select id="dkCat"></select></label><button type="button" id="dkAdd">Add default rule</button></div>
+<div class="fg" style="margin-top:8px"><input id="dkFilter" placeholder="Filter rules…"></div>
+<div id="defKwList" class="scrollbox"></div></section>
+</div>
+</div>
 </main><div class="toast" id="toast"><span id="tm"></span><button id="undo">Undo</button></div>
 <script type="module" src="/src/main.ts"></script></body></html>

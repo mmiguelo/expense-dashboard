@@ -2,13 +2,18 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import './styles.css';
 import { readSupabaseConfig } from './config';
 import { LegacyLocalStore } from './storage/legacyLocalStore';
+import { SupabaseAdminRepository } from './storage/supabaseAdminRepository';
 import { createSupabaseClient } from './storage/supabaseClient';
 import { SupabaseRepository } from './storage/supabaseRepository';
+import type { Profile } from './types';
+import { startAdmin, type AdminHandle } from './ui/admin';
 import { setupAuthScreen, setupRecoveryScreen } from './ui/auth';
 import { importMessage, startApp, type AppHandle } from './ui/app';
 
-const SCREENS = ['loading', 'configError', 'auth', 'recovery', 'app'] as const;
+const SCREENS = ['loading', 'configError', 'auth', 'recovery', 'deactivated', 'app'] as const;
 type Screen = (typeof SCREENS)[number];
+const VIEWS = ['dashboard', 'settings', 'admin'] as const;
+type View = (typeof VIEWS)[number];
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -28,7 +33,7 @@ function main(): void {
   }
 
   setupAuthScreen(document, supabase);
-  let app: Promise<AppHandle> | null = null;
+  let started: Promise<unknown> | null = null;
   // Arriving from a password-reset email.
   let recovering = /type=recovery/.test(location.hash);
 
@@ -40,13 +45,11 @@ function main(): void {
   function onSession(session: Session | null): void {
     if (recovering) return show('recovery');
     if (session) {
-      app ??= startSignedIn(supabase, session).catch((e) => {
+      started ??= startSignedIn(supabase, session).catch((e) => {
         $('configMsg').textContent = `Couldn't load your data: ${(e as Error).message}. Reload the page to try again.`;
         show('configError');
-        throw e;
       });
-      show('app');
-    } else if (app) {
+    } else if (started) {
       // Signed out (here or in another tab) or the session ended: drop everything in memory.
       location.reload();
     } else show('auth');
@@ -58,18 +61,60 @@ function main(): void {
     setTimeout(() => onSession(session), 0);
   });
 
-  $('logout').addEventListener('click', async () => {
+  const logout = async () => {
     await supabase.auth.signOut({ scope: 'local' });
     location.reload();
-  });
+  };
+  $('logout').addEventListener('click', logout);
+  $('deactivatedLogout').addEventListener('click', logout);
 }
 
-async function startSignedIn(supabase: SupabaseClient, session: Session): Promise<AppHandle> {
-  $('who').textContent = session.user.email ?? '';
+function showDeactivated(profile: Pick<Profile, 'email'>): void {
+  $('deactivatedWho').textContent = `Signed in as ${profile.email}.`;
+  show('deactivated');
+}
+
+async function startSignedIn(supabase: SupabaseClient, session: Session): Promise<void> {
   const repo = new SupabaseRepository(supabase, session.user.id);
-  const app = await startApp({ doc: document, repo });
+  const profile = await repo.getProfile();
+  if (!profile.active) return showDeactivated(profile);
+
+  showAccount(profile);
+  show('app');
+  const app = await startApp({ doc: document, repo, onDeactivated: () => showDeactivated(profile) });
+
+  let admin: AdminHandle | null = null;
+  setupViews(async (view) => {
+    if (view !== 'admin' || profile.role !== 'admin') return;
+    admin ??= startAdmin({ doc: document, repo: new SupabaseAdminRepository(supabase), me: profile, notify: app.notify });
+    await admin.refresh();
+  });
+  $('adminNav').hidden = profile.role !== 'admin';
+
+  // Coming back to the tab: pick up changes from other devices, and deactivation.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void app.refresh().catch(() => {});
+  });
+
   offerLocalImport(repo, app, session.user.id);
-  return app;
+}
+
+function showAccount(profile: Profile): void {
+  $('who').textContent = profile.displayName || profile.email;
+  $('acctEmail').textContent = profile.email;
+  $('acctRole').textContent = profile.role === 'admin' ? 'Admin' : 'Member';
+  $('acctRole').className = `badge ${profile.role === 'admin' ? 'admin' : ''}`;
+}
+
+function setupViews(onOpen: (view: View) => Promise<void>): void {
+  const ids: Record<View, string> = { dashboard: 'viewDashboard', settings: 'viewSettings', admin: 'viewAdmin' };
+  $('views').addEventListener('click', (e) => {
+    const view = (e.target as HTMLElement).dataset.view as View | undefined;
+    if (!view) return;
+    for (const v of VIEWS) $(ids[v]).hidden = v !== view;
+    document.querySelectorAll<HTMLElement>('#views button').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
+    void onOpen(view);
+  });
 }
 
 /** Offer to upload data saved in this browser before accounts existed. */

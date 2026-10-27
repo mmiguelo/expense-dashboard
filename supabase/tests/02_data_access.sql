@@ -8,6 +8,8 @@ select pg_temp.new_user('bob@test.local') as bob \gset
 select pg_temp.new_user('dave@test.local') as dave \gset
 select pg_temp.new_user('carol@test.local', confirmed => false) as carol \gset
 update public.profiles set role = 'admin' where id = :'admin';
+-- Rows each user gets from the defaults, plus the 5 that pg_temp.fill adds.
+select (select count(*) from public.default_categories) + (select count(*) from public.default_keyword_rules) + 5 as full_rows \gset
 
 -- Every per-user data table, and a way to count what the current caller can see in each.
 create function pg_temp.visible_rows(owner uuid) returns int language plpgsql as $$
@@ -43,7 +45,7 @@ begin
 end $$;
 select pg_temp.fill(:'alice');
 select pg_temp.fill(:'dave');
-select results_eq(format('select pg_temp.visible_rows(%L)', :'alice'), array[13 + 84 + 5], 'setup: Alice has rows in every table (as superuser)');
+select results_eq(format('select pg_temp.visible_rows(%L)', :'alice'), array[:full_rows], 'setup: Alice has rows in every table (as superuser)');
 
 -- ---- another member ----
 select pg_temp.act_as(:'bob');
@@ -60,7 +62,7 @@ select throws_ok(format($$insert into public.transactions (user_id, date, amount
 insert into public.transactions (date, amount, type, category) values ('2026-01-01', 1, 'expense', 'X');
 select throws_ok(format($$update public.transactions set user_id = %L$$, :'alice'), '42501', null, 'a member cannot give their rows to someone else');
 reset role;
-select results_eq(format('select pg_temp.visible_rows(%L)', :'alice'), array[13 + 84 + 5], 'Alice''s rows are unchanged');
+select results_eq(format('select pg_temp.visible_rows(%L)', :'alice'), array[:full_rows], 'Alice''s rows are unchanged');
 
 -- ---- the admin: account info yes, financial data no ----
 select pg_temp.act_as(:'admin');
@@ -112,13 +114,13 @@ select is_empty('delete from public.budgets returning category', 'a deactivated 
 select is_empty($$update public.profiles set display_name = 'x' returning id$$, 'a deactivated user cannot change their profile');
 select results_eq('select active from public.profiles', array[false], 'a deactivated user can still see that they are deactivated');
 reset role;
-select results_eq(format('select pg_temp.visible_rows(%L)', :'dave'), array[13 + 84 + 5], 'deactivation keeps all of the user''s data');
+select results_eq(format('select pg_temp.visible_rows(%L)', :'dave'), array[:full_rows], 'deactivation keeps all of the user''s data');
 
 select pg_temp.act_as(null);  -- superuser without a signed-in user, like the SQL Editor
 update public.profiles set active = true where id = :'dave';
 select pg_temp.act_as(:'dave');
 set local role authenticated;
-select is(pg_temp.visible_rows(:'dave'), 13 + 84 + 5, 'reactivating restores access to all of it');
+select is(pg_temp.visible_rows(:'dave'), :full_rows, 'reactivating restores access to all of it');
 reset role;
 
 -- ---- unconfirmed email: no access even with a token ----
