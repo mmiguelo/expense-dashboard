@@ -16,9 +16,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  # Applies the migrations to a throwaway local Supabase and runs the database tests,
+  # including the Row Level Security checks. Nothing deploys if they fail.
+  db-tests:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:start
+      - name: Run database tests
+        run: |
+          eval "$(npx supabase status -o env | grep -E '^(API_URL|PUBLISHABLE_KEY)=')"
+          SUPABASE_TEST_URL="$API_URL" SUPABASE_TEST_ANON_KEY="$PUBLISHABLE_KEY" npm run test:db
+
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Public values, set as repository variables (Settings > Secrets and variables >
+      # Actions > Variables). Never the service role / secret key.
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+    steps:
+      - name: Check Supabase settings
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Set the VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY repository variables. The live site was left unchanged."
+            exit 1
+          fi
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
@@ -33,7 +61,7 @@ jobs:
           path: dist
 
   deploy:
-    needs: build
+    needs: [db-tests, build]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
