@@ -1,4 +1,5 @@
-import { daysInMonth, inPeriod, MONTH_NAMES, pad, parseIsoDate, shiftRef, toIsoDate } from './dates';
+import { daysInMonth, inPeriod, pad, parseIsoDate, shiftRef, toIsoDate } from './dates';
+import { monthNames } from './i18n';
 import type { Budgets, Mode, Transaction } from './types';
 
 // All functions are pure. `ref` is the selected date (YYYY-MM-DD) and `today` the
@@ -132,7 +133,7 @@ export function trendBars(expenses: Transaction[], ref: string, mode: Mode): Tre
   } else {
     for (let i = 1; i <= 12; i++) {
       const k = `${y}-${pad(i)}`;
-      buckets.push([MONTH_NAMES[i - 1]![0]!, (x) => x.date.slice(0, 7) === k]);
+      buckets.push([monthNames()[i - 1]![0]!.toUpperCase(), (x) => x.date.slice(0, 7) === k]);
     }
   }
   return buckets.map(([label, match]) => {
@@ -182,6 +183,7 @@ export function topMerchants(periodExpenses: Transaction[], limit = 5): Merchant
 export interface QuickPick {
   desc: string;
   cat: string;
+  sub?: string;
   /** Amount of the most recently added expense with this description. */
   amount: number;
 }
@@ -191,14 +193,14 @@ export function frequentExpenses(expenses: Transaction[], limit = 6): QuickPick[
   const f: Record<string, QuickPick & { n: number }> = {};
   expenses.forEach((x) => {
     const k = x.desc.toLowerCase();
-    f[k] = f[k] || { n: 0, desc: x.desc, cat: x.cat, amount: x.amount };
+    f[k] = f[k] || { n: 0, desc: x.desc, cat: x.cat, sub: x.sub, amount: x.amount };
     f[k].n++;
     f[k].amount = x.amount;
   });
   return Object.values(f)
     .sort((a, b) => b.n - a.n)
     .slice(0, limit)
-    .map(({ desc, cat, amount }) => ({ desc, cat, amount }));
+    .map(({ desc, cat, sub, amount }) => ({ desc, cat, ...(sub ? { sub } : {}), amount }));
 }
 
 /**
@@ -214,7 +216,7 @@ export function searchTransactions(txs: Transaction[], ref: string, mode: Mode, 
       ([x]) =>
         inPeriod(x.date, ref, mode) &&
         (!category || x.cat === category) &&
-        (!q || (x.desc + ' ' + (x.tags || '') + ' ' + x.amount + ' ' + x.cat).toLowerCase().includes(q)),
+        (!q || (x.desc + ' ' + (x.tags || '') + ' ' + x.amount + ' ' + x.cat + ' ' + (x.sub || '')).toLowerCase().includes(q)),
     )
     .sort(([a, i], [b, j]) => b.date.localeCompare(a.date) || j - i)
     .map(([x]) => x);

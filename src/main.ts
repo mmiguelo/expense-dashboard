@@ -1,13 +1,16 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import './styles.css';
 import { readSupabaseConfig } from './config';
+import { initLang, t, tn, translateError, translatePage } from './i18n';
 import { LegacyLocalStore } from './storage/legacyLocalStore';
+import { foldedSections, saveFoldedSections, savedLanguage } from './storage/preferences';
 import { SupabaseAdminRepository } from './storage/supabaseAdminRepository';
 import { createSupabaseClient } from './storage/supabaseClient';
 import { SupabaseRepository } from './storage/supabaseRepository';
 import type { Profile } from './types';
 import { startAdmin, type AdminHandle } from './ui/admin';
 import { setupAuthScreen, setupRecoveryScreen } from './ui/auth';
+import { setupFolding } from './ui/folding';
 import { importMessage, startApp, type AppHandle } from './ui/app';
 
 const SCREENS = ['loading', 'configError', 'auth', 'recovery', 'deactivated', 'app'] as const;
@@ -23,6 +26,9 @@ function show(screen: Screen): void {
 }
 
 function main(): void {
+  initLang(savedLanguage());
+  translatePage(document);
+  setupFolding(document, foldedSections(), saveFoldedSections);
   let supabase: SupabaseClient;
   try {
     supabase = createSupabaseClient(readSupabaseConfig());
@@ -46,7 +52,7 @@ function main(): void {
     if (recovering) return show('recovery');
     if (session) {
       started ??= startSignedIn(supabase, session).catch((e) => {
-        $('configMsg').textContent = `Couldn't load your data: ${(e as Error).message}. Reload the page to try again.`;
+        $('configMsg').textContent = t('err.load', { message: translateError((e as Error).message) });
         show('configError');
       });
     } else if (started) {
@@ -70,7 +76,7 @@ function main(): void {
 }
 
 function showDeactivated(profile: Pick<Profile, 'email'>): void {
-  $('deactivatedWho').textContent = `Signed in as ${profile.email}.`;
+  $('deactivatedWho').textContent = t('account.signedInAs', { email: profile.email });
   show('deactivated');
 }
 
@@ -102,7 +108,7 @@ async function startSignedIn(supabase: SupabaseClient, session: Session): Promis
 function showAccount(profile: Profile): void {
   $('who').textContent = profile.displayName || profile.email;
   $('acctEmail').textContent = profile.email;
-  $('acctRole').textContent = profile.role === 'admin' ? 'Admin' : 'Member';
+  $('acctRole').textContent = t(profile.role === 'admin' ? 'role.admin' : 'role.member');
   $('acctRole').className = `badge ${profile.role === 'admin' ? 'admin' : ''}`;
 }
 
@@ -126,9 +132,7 @@ function offerLocalImport(repo: SupabaseRepository, app: AppHandle, userId: stri
   settingsButton.hidden = false;
   if (!local.wasImportedBy(userId)) {
     const n = local.transactionCount;
-    $('localImportText').textContent =
-      `This browser has ${n} transaction${n === 1 ? '' : 's'} saved from before you had an account. ` +
-      'Import them into your account to see them on all your devices. Anything already in your account is skipped, so it is safe to do more than once.';
+    $('localImportText').textContent = tn('localImport.text', n);
     $('localImport').hidden = false;
   }
 
@@ -141,7 +145,7 @@ function offerLocalImport(repo: SupabaseRepository, app: AppHandle, userId: stri
       await app.refresh();
       app.notify(importMessage(result));
     } catch (e) {
-      app.notify(`Import failed: ${(e as Error).message}. Nothing was changed; try again.`);
+      app.notify(t('import.failed', { message: translateError((e as Error).message) }));
     } finally {
       (button as HTMLButtonElement).disabled = false;
     }

@@ -36,7 +36,7 @@ export function generateRecurring(
         out.push({
           recurringId: r.id,
           month,
-          transaction: { id: newId(), date, amount: r.amount, desc: r.desc, cat: r.cat, type: 'e', fixed: 1, tags: 'recurring' },
+          transaction: { id: newId(), date, amount: r.amount, desc: r.desc, cat: r.cat, ...(r.sub ? { sub: r.sub } : {}), type: 'e', fixed: 1, tags: 'recurring' },
         });
       }
       m++;

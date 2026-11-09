@@ -11,8 +11,10 @@ export interface Transaction {
   date: string;
   amount: number;
   desc: string;
-  /** Category name; always 'Income' for income. */
+  /** Category name; always 'Rendimentos' for income ('Income' in old data). */
   cat: string;
+  /** One of the category's subcategories; absent or '' = none. */
+  sub?: string;
   type: TxType;
   tags?: string;
   /** Set on transactions generated from a recurring expense. */
@@ -26,6 +28,7 @@ export interface RecurringExpense {
   desc: string;
   amount: number;
   cat: string;
+  sub?: string;
   /** Day of month, 1-31. Clamped to the last day in shorter months. */
   day: number;
   /** First month to generate, YYYY-MM. */
@@ -37,6 +40,9 @@ export type Budgets = Record<string, number>;
 
 /** Category name -> colour. Insertion order is display order. */
 export type Categories = Record<string, string>;
+
+/** Category name -> its subcategories, in display order. */
+export type Subcategories = Record<string, string[]>;
 
 /** Lower-cased description -> category the user picked for it. */
 export type LearnedCategories = Record<string, string>;
@@ -82,6 +88,8 @@ export interface Snapshot {
   rec: RecurringExpense[];
   bud: Budgets;
   cats: Categories;
+  /** Absent in backups from before subcategories. */
+  subs?: Subcategories;
   learn: LearnedCategories;
   gen: GeneratedMonths;
   /** Keyword rules; absent in backups from before accounts had their own. */

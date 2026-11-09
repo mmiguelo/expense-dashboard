@@ -49,7 +49,7 @@ function type(id: string, value: string, event = 'input'): void {
 }
 
 async function signInThroughForm(email: string, password = PASSWORD): Promise<void> {
-  if ($('authSubmit').textContent !== 'Sign in') $('authSwitch').click();
+  if ($('authSubmit').textContent !== 'Iniciar sessão') $('authSwitch').click();
   type('authEmail', email);
   type('authPass', password);
   $<HTMLFormElement>('authForm').requestSubmit();
@@ -59,7 +59,7 @@ const onDashboard = () => visible('app') && $<HTMLSelectElement>('cat').options.
 
 /** Create an account, confirm it from the email, then sign in, all as a user would. */
 async function signUpThroughForm(email: string): Promise<void> {
-  if ($('authSubmit').textContent !== 'Create account') $('authSwitch').click();
+  if ($('authSubmit').textContent !== 'Criar conta') $('authSwitch').click();
   type('authEmail', email);
   type('authPass', PASSWORD);
   $<HTMLFormElement>('authForm').requestSubmit();
@@ -104,7 +104,7 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     type('authPass', 'wrong-password');
     $<HTMLFormElement>('authForm').requestSubmit();
     await until(() => $('authMsg').textContent !== '', 'error message');
-    expect($('authMsg').textContent).toBe('Wrong email or password.');
+    expect($('authMsg').textContent).toBe('Email ou palavra-passe incorretos.');
     expect(visible('app')).toBe(false);
   });
 
@@ -120,7 +120,7 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     $('sub').click();
     await until(() => $('list').textContent!.includes('Pingo Doce'), 'new expense in the list');
     const [saved] = await (await accountRepo(email)).listTransactions();
-    expect(saved).toMatchObject({ desc: 'Pingo Doce', amount: 23.4, cat: 'Groceries', type: 'e' });
+    expect(saved).toMatchObject({ desc: 'Pingo Doce', amount: 23.4, cat: 'Alimentação', type: 'e' });
 
     await openPage();
     await until(() => visible('app') && $('list').textContent!.includes('Pingo Doce'), 'still signed in after reload');
@@ -131,10 +131,10 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
       'exp-v2',
       JSON.stringify({
         ex: [
-          { id: 1773828000000.5, date: new Date().toLocaleDateString('sv'), amount: 20, desc: 'Old Lidl', cat: 'Groceries', type: 'e', tags: '' },
+          { id: 1773828000000.5, date: new Date().toLocaleDateString('sv'), amount: 20, desc: 'Old Lidl', cat: 'Alimentação', type: 'e', tags: '' },
           { id: 1773828000001.5, date: new Date().toLocaleDateString('sv'), amount: 7, desc: 'Old Kebab', cat: 'Takeaway', type: 'e', tags: '' },
         ],
-        bud: { Groceries: 100 },
+        bud: { Alimentação: 100 },
       }),
     );
     const email = newEmail();
@@ -142,17 +142,17 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     await signUpThroughForm(email);
 
     await until(() => visible('localImport'), 'import offer');
-    expect($('localImportText').textContent).toContain('2 transactions');
+    expect($('localImportText').textContent).toContain('2 movimentos');
     $('localImportBtn').click();
-    await until(() => $('tm').textContent!.startsWith('Imported'), 'import message');
-    expect($('tm').textContent).toBe('Imported 2 transactions');
+    await until(() => $('tm').textContent!.startsWith('Importados'), 'import message');
+    expect($('tm').textContent).toBe('Importados 2 movimentos');
     expect(visible('localImport')).toBe(false);
     expect($('list').textContent).toContain('Old Kebab');
 
     // Again, from Settings: nothing new.
     $('localImportSettings').click();
-    await until(() => $('tm').textContent!.includes('skipped'), 'second import message');
-    expect($('tm').textContent).toBe('Imported 0 transactions (2 already there, skipped)');
+    await until(() => $('tm').textContent!.includes('ignorados'), 'second import message');
+    expect($('tm').textContent).toBe('Importados 0 movimentos (2 já existiam, ignorados)');
     expect(await (await accountRepo(email)).listTransactions()).toHaveLength(2);
 
     // After a reload the offer doesn't come back for this user.
@@ -187,7 +187,7 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     await openPage();
     await signUpThroughForm(email);
     expect($('acctEmail').textContent).toBe(email);
-    expect($('acctRole').textContent).toBe('Member');
+    expect($('acctRole').textContent).toBe('Membro');
     expect(visible('adminNav')).toBe(false);
     expect($('userRows').innerHTML).toBe('');
   });
@@ -198,7 +198,7 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     type('desc', 'Pingo Doce');
     type('amt', '10');
     $('sub').click();
-    await until(() => $('list').textContent!.includes('Groceries'), 'expense in Groceries');
+    await until(() => $('list').textContent!.includes('Alimentação'), 'expense in Alimentação');
 
     openView('settings');
     type('nc', 'Pets');
@@ -207,19 +207,19 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     await until(() => !!document.querySelector('[data-cat-name="Pets"]'), 'new category');
     expect(document.querySelector<HTMLInputElement>('[data-cat-color="Pets"]')!.value).toBe('#123456');
 
-    const color = document.querySelector<HTMLInputElement>('[data-cat-color="Groceries"]')!;
+    const color = document.querySelector<HTMLInputElement>('[data-cat-color="Alimentação"]')!;
     color.value = '#ff0000';
     color.dispatchEvent(new Event('change', { bubbles: true }));
-    await until(() => document.querySelector<HTMLInputElement>('[data-cat-color="Groceries"]')?.value === '#ff0000', 'recolor saved');
+    await until(() => document.querySelector<HTMLInputElement>('[data-cat-color="Alimentação"]')?.value === '#ff0000', 'recolor saved');
 
-    document.querySelector<HTMLInputElement>('[data-cat-name="Groceries"]')!.value = 'Food';
-    (document.querySelector('[data-cat-rename="Groceries"]') as HTMLElement).click();
+    document.querySelector<HTMLInputElement>('[data-cat-name="Alimentação"]')!.value = 'Food';
+    (document.querySelector('[data-cat-rename="Alimentação"]') as HTMLElement).click();
     await until(() => $('list').textContent!.includes('Food'), 'renamed in the list');
-    expect($('list').textContent).not.toContain('Groceries');
+    expect($('list').textContent).not.toContain('Alimentação');
 
     (document.querySelector('[data-cat-delete="Food"]') as HTMLElement).click();
     expect(visible('catDelete')).toBe(true);
-    expect($('catDeleteText').textContent).toContain('used by 1 transaction');
+    expect($('catDeleteText').textContent).toContain('usada por 1 movimento');
     $<HTMLSelectElement>('catDeleteTo').value = 'Pets';
     $('catDeleteOk').click();
     await until(() => $('list').textContent!.includes('Pets'), 'moved to Pets');
@@ -231,21 +231,78 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     await signUpThroughForm(newEmail());
     openView('settings');
     type('kwNew', 'Vet');
-    $<HTMLSelectElement>('kwNewCat').value = 'Health';
+    $<HTMLSelectElement>('kwNewCat').value = 'Saúde';
     $('kwAdd').click();
     await until(() => $('kwList').textContent!.includes('vet'), 'rule listed');
     openView('dashboard');
     type('desc', 'Vet appointment');
-    expect($<HTMLSelectElement>('cat').value).toBe('Health');
+    expect($<HTMLSelectElement>('cat').value).toBe('Saúde');
+  });
+
+  it('subcategories: guessed from the description, saved, and managed in settings', async () => {
+    const email = newEmail();
+    await openPage();
+    await signUpThroughForm(email);
+    type('desc', 'Netflix março');
+    expect($<HTMLSelectElement>('cat').value).toBe('Subscrições');
+    expect($<HTMLSelectElement>('subcat').value).toBe('Netflix');
+    type('amt', '13,99');
+    $('sub').click();
+    await until(() => $('list').textContent!.includes('Subscrições › Netflix'), 'expense with its subcategory');
+
+    $<HTMLSelectElement>('type').value = 'i';
+    $('type').dispatchEvent(new Event('change'));
+    expect($<HTMLSelectElement>('cat').value).toBe('Rendimentos');
+    type('desc', 'Salário outubro');
+    expect($<HTMLSelectElement>('subcat').value).toBe('Salário');
+    type('amt', '1500');
+    $('sub').click();
+    await until(() => $('list').textContent!.includes('Rendimentos › Salário'), 'income with its subcategory');
+    const saved = await (await accountRepo(email)).listTransactions();
+    expect(saved.map((x) => [x.cat, x.sub, x.type])).toEqual([
+      ['Subscrições', 'Netflix', 'e'],
+      ['Rendimentos', 'Salário', 'i'],
+    ]);
+
+    openView('settings');
+    expect(document.querySelector('[data-cat-rename="Rendimentos"]')).toBeNull();
+    const input = document.querySelector<HTMLInputElement>('[data-sub-new="Lazer"]')!;
+    input.value = 'Bowling';
+    (document.querySelector('[data-sub-add="Lazer"]') as HTMLElement).click();
+    await until(() => !!document.querySelector('[data-sub-delete="Bowling"]'), 'new subcategory listed');
+    (document.querySelector('[data-sub-delete="Bowling"][data-sub-cat="Lazer"]') as HTMLElement).click();
+    await until(() => !document.querySelector('[data-sub-delete="Bowling"]'), 'subcategory deleted');
+  });
+
+  it('settings: sections collapse to their heading, remembered on reload', async () => {
+    await openPage();
+    await signUpThroughForm(newEmail());
+    openView('settings');
+    localStorage.removeItem('folded-sections');
+    await openPage();
+    await until(onDashboard, 'dashboard');
+    const sections = ['secCategories', 'secRules', 'secBudgets', 'secRecurring', 'secBackup'];
+    expect(sections.filter((id) => $(id).classList.contains('folded'))).toEqual(sections);
+    const button = () => document.querySelector<HTMLButtonElement>('#secRules .foldbtn')!;
+    expect(button().getAttribute('aria-expanded')).toBe('false');
+    expect(button().title).toBe('Mostrar mais');
+    button().click();
+    expect($('secRules').classList.contains('folded')).toBe(false);
+    expect(button().getAttribute('aria-expanded')).toBe('true');
+    expect(button().title).toBe('Mostrar menos');
+
+    await openPage();
+    await until(onDashboard, 'dashboard after reload');
+    expect(sections.filter((id) => !$(id).classList.contains('folded'))).toEqual(['secRules']);
   });
 
   it('wrong password: a friendly message and a visible cooldown', async () => {
     await openPage();
     await signInThroughForm(newEmail(), 'wrong-password');
     await until(() => $('authMsg').textContent !== '', 'error');
-    expect($('authMsg').textContent).toBe('Wrong email or password.');
+    expect($('authMsg').textContent).toBe('Email ou palavra-passe incorretos.');
     expect($<HTMLButtonElement>('authSubmit').disabled).toBe(true);
-    expect($('authSubmit').textContent).toMatch(/^Sign in \(\ds\)$/);
+    expect($('authSubmit').textContent).toMatch(/^Iniciar sessão \(\ds\)$/);
   });
 
   it('an unconfirmed account cannot sign in, and is offered a new confirmation email', async () => {
@@ -255,11 +312,11 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     await openPage();
     await signInThroughForm(email);
     await until(() => $('authMsg').textContent !== '', 'error');
-    expect($('authMsg').textContent).toMatch(/Confirm your email first/);
+    expect($('authMsg').textContent).toMatch(/Confirme primeiro o seu email/);
     expect(visible('authResendRow')).toBe(true);
     expect(visible('app')).toBe(false);
     $('authResend').click();
-    await until(() => $('authMsg').textContent!.includes('new confirmation link'), 'resend message');
+    await until(() => $('authMsg').textContent!.includes('novo link de confirmação'), 'resend message');
     expect($<HTMLButtonElement>('authResend').disabled).toBe(true);
   });
 
@@ -269,7 +326,7 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     await openPage();
     await signInThroughForm(admin.email);
     await until(onDashboard, 'dashboard');
-    expect($('acctRole').textContent).toBe('Admin');
+    expect($('acctRole').textContent).toBe('Administrador');
     expect(visible('adminNav')).toBe(true);
     openView('admin');
     await until(() => $('userRows').textContent!.includes(member.email), 'member listed');
@@ -322,9 +379,9 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     openView('admin');
     await until(() => !!document.querySelector(`[data-user-toggle="${member.id}"]`), 'member row');
     (document.querySelector(`[data-user-toggle="${member.id}"]`) as HTMLElement).click();
-    await until(() => document.querySelector(`[data-user-toggle="${member.id}"]`)?.textContent === 'Reactivate', 'deactivated');
+    await until(() => document.querySelector(`[data-user-toggle="${member.id}"]`)?.textContent === 'Reativar', 'deactivated');
     (document.querySelector(`[data-user-toggle="${member.id}"]`) as HTMLElement).click();
-    await until(() => document.querySelector(`[data-user-toggle="${member.id}"]`)?.textContent === 'Deactivate', 'reactivated');
+    await until(() => document.querySelector(`[data-user-toggle="${member.id}"]`)?.textContent === 'Desativar', 'reactivated');
 
     (document.querySelector('#adminTabs [data-tab="defaults"]') as HTMLElement).click();
     expect(visible('adminDefaults')).toBe(true);

@@ -1,4 +1,5 @@
 import { escapeHtml as esc } from '../format';
+import { t, translateError } from '../i18n';
 import { ROLES, type AdminRepository, type DefaultCategory, type DefaultKeywordRule } from '../storage/adminRepository';
 import type { Profile } from '../types';
 
@@ -33,7 +34,7 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
       await change();
       if (done) notify(done);
     } catch (e) {
-      notify(`Couldn't save: ${friendly(message(e))}`);
+      notify(t('admin.saveFailed', { message: translateError(message(e)) }));
     }
     await refresh();
   }
@@ -42,15 +43,15 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
     $('userRows').innerHTML = profiles
       .map((p) => {
         const self = p.id === me.id;
-        const lock = self ? ' disabled title="You can\'t change your own role or status"' : '';
-        const roles = ROLES.map((r) => `<option${r === p.role ? ' selected' : ''}>${r}</option>`).join('');
+        const lock = self ? ` disabled title="${esc(t('admin.lockTitle'))}"` : '';
+        const roles = ROLES.map((r) => `<option value="${r}"${r === p.role ? ' selected' : ''}>${t(`role.${r}`)}</option>`).join('');
         return `<tr data-user="${p.id}">
-<td>${esc(p.email)}${self ? ' <span class="badge">you</span>' : ''}</td>
-<td><input value="${esc(p.displayName)}" data-user-name="${p.id}" maxlength="100" aria-label="Display name for ${esc(p.email)}"></td>
-<td><select data-user-role="${p.id}" aria-label="Role for ${esc(p.email)}"${lock}>${roles}</select></td>
-<td>${p.active ? '<span class="badge">active</span>' : '<span class="badge off">deactivated</span>'}</td>
+<td>${esc(p.email)}${self ? ` <span class="badge">${t('admin.you')}</span>` : ''}</td>
+<td><input value="${esc(p.displayName)}" data-user-name="${p.id}" maxlength="100" aria-label="${esc(t('admin.displayNameFor', { email: p.email }))}"></td>
+<td><select data-user-role="${p.id}" aria-label="${esc(t('admin.roleFor', { email: p.email }))}"${lock}>${roles}</select></td>
+<td>${p.active ? `<span class="badge">${t('admin.active')}</span>` : `<span class="badge off">${t('admin.deactivated')}</span>`}</td>
 <td>${date(p.createdAt)}</td>
-<td><button type="button" data-user-toggle="${p.id}"${lock}>${p.active ? 'Deactivate' : 'Reactivate'}</button></td></tr>`;
+<td><button type="button" data-user-toggle="${p.id}"${lock}>${t(p.active ? 'admin.deactivate' : 'admin.reactivate')}</button></td></tr>`;
       })
       .join('');
   }
@@ -60,9 +61,9 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
       cats
         .map(
           (c) =>
-            `<div class="erow" style="grid-template-columns:44px 1fr 80px auto auto"><input type="color" value="${esc(c.color)}" data-dc-color="${c.id}" aria-label="Colour of ${esc(c.name)}"><input value="${esc(c.name)}" data-dc-name="${c.id}" maxlength="100" aria-label="Name"><input type="number" value="${c.sortOrder}" data-dc-order="${c.id}" aria-label="Sort order of ${esc(c.name)}" title="Sort order"><button type="button" data-dc-save="${c.id}">Save</button><button type="button" class="x" data-dc-delete="${c.id}" aria-label="Delete ${esc(c.name)}">✕</button></div>`,
+            `<div class="erow" style="grid-template-columns:44px 1fr 80px auto auto"><input type="color" value="${esc(c.color)}" data-dc-color="${c.id}" aria-label="${esc(t('cat.colourOf', { name: c.name }))}"><input value="${esc(c.name)}" data-dc-name="${c.id}" maxlength="100" aria-label="${esc(t('common.name'))}"><input type="number" value="${c.sortOrder}" data-dc-order="${c.id}" aria-label="${esc(t('admin.sortOrderOf', { name: c.name }))}" title="${esc(t('admin.sortOrder'))}"><button type="button" data-dc-save="${c.id}">${t('common.save')}</button><button type="button" class="x" data-dc-delete="${c.id}" aria-label="${esc(t('cat.deleteNamed', { name: c.name }))}">✕</button></div>`,
         )
-        .join('') || '<div class="mute">No default categories.</div>';
+        .join('') || `<div class="mute">${t('admin.noDefaultCategories')}</div>`;
 
     const sel = $<HTMLSelectElement>('dkCat');
     const keep = sel.value;
@@ -75,16 +76,16 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
       shown
         .map((r) => {
           const options = cats.map((c) => `<option${c.name === r.category ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
-          return `<div class="krow"><code>${esc(r.keyword.replace(/ /g, '␣'))}</code><select data-dk-cat="${r.id}" aria-label="Category for ${esc(r.keyword)}">${options}</select><button type="button" class="x" data-dk-delete="${r.id}" aria-label="Delete rule ${esc(r.keyword)}">✕</button></div>`;
+          return `<div class="krow"><code>${esc(r.keyword.replace(/ /g, '␣'))}</code><select data-dk-cat="${r.id}" aria-label="${esc(t('rules.categoryFor', { keyword: r.keyword }))}">${options}</select><button type="button" class="x" data-dk-delete="${r.id}" aria-label="${esc(t('rules.deleteNamed', { keyword: r.keyword }))}">✕</button></div>`;
         })
-        .join('') || `<div class="mute">${rules.length ? 'No rules match.' : 'No default rules.'}</div>`;
+        .join('') || `<div class="mute">${t(rules.length ? 'rules.noMatch' : 'admin.noDefaultRules')}</div>`;
   }
 
   async function refresh(): Promise<void> {
     try {
       [profiles, cats, rules] = await Promise.all([repo.listProfiles(), repo.listDefaultCategories(), repo.listDefaultKeywordRules()]);
     } catch (e) {
-      notify(`Couldn't load the admin data: ${message(e)}`);
+      notify(t('admin.loadFailed', { message: translateError(message(e)) }));
     }
     renderUsers();
     renderDefaults();
@@ -103,19 +104,19 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
   const profile = (id: string | undefined) => profiles.find((p) => p.id === id);
 
   $('userRows').addEventListener('change', (e) => {
-    const t = e.target as HTMLInputElement;
-    const role = profile(t.dataset.userRole);
-    if (role) void run(() => repo.updateProfile(role.id, { role: t.value as Profile['role'] }), `${role.email} is now ${t.value === 'admin' ? 'an admin' : 'a member'}`);
-    const named = profile(t.dataset.userName);
-    if (named) void run(() => repo.updateProfile(named.id, { displayName: t.value.trim() }), 'Name saved');
+    const target = e.target as HTMLInputElement;
+    const role = profile(target.dataset.userRole);
+    if (role) void run(() => repo.updateProfile(role.id, { role: target.value as Profile['role'] }), t(target.value === 'admin' ? 'admin.nowAdmin' : 'admin.nowMember', { email: role.email }));
+    const named = profile(target.dataset.userName);
+    if (named) void run(() => repo.updateProfile(named.id, { displayName: target.value.trim() }), t('admin.nameSaved'));
   });
 
   $('userRows').addEventListener('click', (e) => {
     const p = profile((e.target as HTMLElement).dataset.userToggle);
     if (!p) return;
     const win = doc.defaultView!;
-    if (p.active && !win.confirm(`Deactivate ${p.email}? They are signed out of the data immediately. Nothing is deleted, and you can reactivate them later.`)) return;
-    void run(() => repo.updateProfile(p.id, { active: !p.active }), `${p.email} ${p.active ? 'deactivated' : 'reactivated'}`);
+    if (p.active && !win.confirm(t('admin.confirmDeactivate', { email: p.email }))) return;
+    void run(() => repo.updateProfile(p.id, { active: !p.active }), t(p.active ? 'admin.wasDeactivated' : 'admin.wasReactivated', { email: p.email }));
   });
 
   // ---- default categories ----
@@ -125,15 +126,15 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
   $('dcAdd').addEventListener('click', () => {
     const name = $('dcName').value.trim();
     if (!name) return;
-    if (cats.some((c) => c.name === name)) return notify(`There is already a default category called "${name}".`);
+    if (cats.some((c) => c.name === name)) return notify(t('admin.categoryExists', { name }));
     const sortOrder = Math.max(0, ...cats.map((c) => c.sortOrder)) + 10;
     $('dcName').value = '';
-    void run(() => repo.saveDefaultCategory({ name, color: $('dcColor').value, sortOrder }), `Added "${name}"`);
+    void run(() => repo.saveDefaultCategory({ name, color: $('dcColor').value, sortOrder }), t('admin.added', { name }));
   });
 
   $('defCatList').addEventListener('click', (e) => {
-    const t = e.target as HTMLElement;
-    const save = cat(t.dataset.dcSave);
+    const target = e.target as HTMLElement;
+    const save = cat(target.dataset.dcSave);
     if (save) {
       const changed: DefaultCategory = {
         ...save,
@@ -141,26 +142,26 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
         color: field('data-dc-color', save.id!).value,
         sortOrder: Number(field('data-dc-order', save.id!).value) || 0,
       };
-      void run(() => repo.saveDefaultCategory(changed), 'Default category saved');
+      void run(() => repo.saveDefaultCategory(changed), t('admin.categorySaved'));
     }
-    const del = cat(t.dataset.dcDelete);
-    if (del && doc.defaultView!.confirm(`Delete the default category "${del.name}" and its rules? Existing accounts keep theirs.`))
-      void run(() => repo.deleteDefaultCategory(del.id!), `Deleted "${del.name}"`);
+    const del = cat(target.dataset.dcDelete);
+    if (del && doc.defaultView!.confirm(t('admin.confirmDeleteCategory', { name: del.name })))
+      void run(() => repo.deleteDefaultCategory(del.id!), t('admin.deleted', { name: del.name }));
   });
 
   // ---- default keyword rules ----
   $('dkAdd').addEventListener('click', () => {
     const keyword = $('dkKeyword').value.toLowerCase();
     if (!keyword.trim()) return;
-    if (rules.some((r) => r.keyword === keyword)) return notify(`There is already a default rule for "${keyword}".`);
+    if (rules.some((r) => r.keyword === keyword)) return notify(t('admin.ruleExists', { keyword }));
     $('dkKeyword').value = '';
-    void run(() => repo.saveDefaultKeywordRule({ keyword, category: $<HTMLSelectElement>('dkCat').value }), 'Rule added');
+    void run(() => repo.saveDefaultKeywordRule({ keyword, category: $<HTMLSelectElement>('dkCat').value }), t('admin.ruleAdded'));
   });
   $('dkFilter').addEventListener('input', renderDefaults);
   $('defKwList').addEventListener('change', (e) => {
-    const t = e.target as HTMLSelectElement;
-    const rule = rules.find((r) => String(r.id) === t.dataset.dkCat);
-    if (rule) void run(() => repo.saveDefaultKeywordRule({ ...rule, category: t.value }));
+    const target = e.target as HTMLSelectElement;
+    const rule = rules.find((r) => String(r.id) === target.dataset.dkCat);
+    if (rule) void run(() => repo.saveDefaultKeywordRule({ ...rule, category: target.value }));
   });
   $('defKwList').addEventListener('click', (e) => {
     const id = (e.target as HTMLElement).dataset.dkDelete;
@@ -170,10 +171,3 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
   return { refresh };
 }
 
-function friendly(m: string): string {
-  if (/at least one active admin/.test(m)) return 'There must always be at least one active admin.';
-  if (/own role/.test(m)) return "You can't change your own role.";
-  if (/deactivate your own/.test(m)) return "You can't deactivate your own account.";
-  if (/duplicate key/.test(m)) return 'That name is already used.';
-  return m;
-}

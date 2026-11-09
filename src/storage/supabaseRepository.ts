@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { normalizeKeyword } from '../categories';
+import { INCOME_CATEGORY, normalizeKeyword } from '../categories';
 import { generatedKey, parseGeneratedKey } from '../recurring';
 import type {
   Budgets,
@@ -11,6 +11,7 @@ import type {
   RecurringExpense,
   RecurringOccurrence,
   Snapshot,
+  Subcategories,
   Transaction,
 } from '../types';
 import type { ImportResult, Repository } from './repository';
@@ -25,6 +26,7 @@ export interface TransactionRow {
   amount: number;
   type: 'expense' | 'income';
   category: string;
+  subcategory: string;
   description: string;
   tags: string;
   fixed: boolean;
@@ -35,6 +37,7 @@ export interface RecurringRow {
   description: string;
   amount: number;
   category: string;
+  subcategory: string;
   day: number;
   /** YYYY-MM-01 */
   start_month: string;
@@ -42,7 +45,7 @@ export interface RecurringRow {
 
 /** PostgREST returns at most this many rows per request. */
 const PAGE = 1000;
-const FALLBACK_COLOR = '#9aa5b5';
+const FALLBACK_COLOR = '#a39b8b';
 const MAX_TEXT = 500;
 
 export const txFromRow = (r: TransactionRow): Transaction => ({
@@ -51,6 +54,7 @@ export const txFromRow = (r: TransactionRow): Transaction => ({
   amount: Number(r.amount),
   desc: r.description,
   cat: r.category,
+  ...(r.subcategory ? { sub: r.subcategory } : {}),
   type: r.type === 'income' ? 'i' : 'e',
   tags: r.tags,
   ...(r.fixed ? { fixed: 1 as const } : {}),
@@ -62,6 +66,7 @@ export const txToRow = (x: Transaction): TransactionRow => ({
   amount: x.amount,
   type: x.type === 'i' ? 'income' : 'expense',
   category: x.cat,
+  subcategory: x.sub || '',
   description: x.desc,
   tags: x.tags || '',
   fixed: !!x.fixed,
@@ -90,6 +95,7 @@ export const ruleFromRow = (r: RecurringRow): RecurringExpense => ({
   desc: r.description,
   amount: Number(r.amount),
   cat: r.category,
+  ...(r.subcategory ? { sub: r.subcategory } : {}),
   day: r.day,
   start: r.start_month.slice(0, 7),
 });
@@ -99,6 +105,7 @@ export const ruleToRow = (r: RecurringExpense): RecurringRow => ({
   description: r.desc,
   amount: r.amount,
   category: r.cat,
+  subcategory: r.sub || '',
   day: r.day,
   start_month: `${r.start}-01`,
 });
@@ -111,10 +118,11 @@ const color = (c: unknown) => (typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test
 
 export interface ImportPayload {
   categories?: { name: string; color: string }[];
+  subcategories?: { category: string; name: string }[];
   budgets?: { category: string; amount: number }[];
   corrections?: { merchant: string; category: string }[];
   keyword_rules?: { keyword: string; category: string }[];
-  recurring?: { source_id: string; description: string; amount: number; category: string; day: number; start_month: string }[];
+  recurring?: { source_id: string; description: string; amount: number; category: string; subcategory: string; day: number; start_month: string }[];
   occurrences?: { recurring_source_id: string; month: string }[];
   transactions?: (Omit<TransactionRow, 'id'> & { source_id: string })[];
 }
@@ -130,6 +138,12 @@ export function toImportPayload(data: Partial<Snapshot>): ImportPayload {
     p.categories = Object.entries(data.cats)
       .filter(([name]) => name.trim())
       .map(([name, c]) => ({ name: text(name, 100), color: color(c) }));
+  if (data.subs)
+    p.subcategories = Object.entries(data.subs).flatMap(([category, names]) =>
+      (Array.isArray(names) ? names : [])
+        .filter((n) => typeof n === 'string' && n.trim())
+        .map((n) => ({ category: text(category, 100), name: text(n, 100) })),
+    );
   if (data.bud)
     p.budgets = Object.entries(data.bud)
       .filter(([category, amount]) => category && isAmount(amount))
@@ -150,6 +164,7 @@ export function toImportPayload(data: Partial<Snapshot>): ImportPayload {
         description: text(r.desc),
         amount: r.amount,
         category: text(r.cat, 100),
+        subcategory: text(r.sub, 100),
         day: Math.trunc(r.day),
         start_month: `${r.start}-01`,
       }));
@@ -166,7 +181,9 @@ export function toImportPayload(data: Partial<Snapshot>): ImportPayload {
         date: x.date,
         amount: x.amount,
         type: x.type === 'i' ? 'income' : 'expense',
-        category: text(x.cat, 100),
+        // Income is always in 'Rendimentos' (old backups say 'Income').
+        category: x.type === 'i' ? INCOME_CATEGORY : text(x.cat, 100),
+        subcategory: text(x.sub, 100),
         description: text(x.desc),
         tags: text(x.tags),
         fixed: !!x.fixed,
@@ -204,7 +221,7 @@ export class SupabaseRepository implements Repository {
 
   async listTransactions(): Promise<Transaction[]> {
     const rows = await this.all<TransactionRow>((from, to) =>
-      this.db.from('transactions').select('id, date, amount, type, category, description, tags, fixed').order('seq').range(from, to),
+      this.db.from('transactions').select('id, date, amount, type, category, subcategory, description, tags, fixed').order('seq').range(from, to),
     );
     return rows.map(txFromRow);
   }
@@ -219,7 +236,7 @@ export class SupabaseRepository implements Repository {
 
   async listRecurring(): Promise<RecurringExpense[]> {
     const rows = await this.all<RecurringRow>((from, to) =>
-      this.db.from('recurring_expenses').select('id, description, amount, category, day, start_month').order('seq').range(from, to),
+      this.db.from('recurring_expenses').select('id, description, amount, category, subcategory, day, start_month').order('seq').range(from, to),
     );
     return rows.map(ruleFromRow);
   }
@@ -248,6 +265,7 @@ export class SupabaseRepository implements Repository {
       date: t.date,
       amount: t.amount,
       category: t.cat,
+      subcategory: t.sub || '',
       description: t.desc,
     }));
     check(await this.db.rpc('add_recurring_occurrences', { items }));
@@ -280,6 +298,23 @@ export class SupabaseRepository implements Repository {
 
   async deleteCategory(name: string, reassignTo: string | null): Promise<void> {
     check(await this.db.rpc('delete_category', { category_name: name, reassign_to: reassignTo }));
+  }
+
+  async getSubcategories(): Promise<Subcategories> {
+    const rows = await this.all<{ category: string; name: string }>((from, to) =>
+      this.db.from('subcategories').select('category, name').order('id').range(from, to),
+    );
+    const out: Subcategories = {};
+    for (const r of rows) (out[r.category] ??= []).push(r.name);
+    return out;
+  }
+
+  async addSubcategory(category: string, name: string): Promise<void> {
+    check(await this.db.from('subcategories').insert({ category, name }));
+  }
+
+  async deleteSubcategory(category: string, name: string): Promise<void> {
+    check(await this.db.rpc('delete_subcategory', { category_name: category, subcategory_name: name }));
   }
 
   async listKeywordRules(): Promise<KeywordRule[]> {
@@ -315,16 +350,17 @@ export class SupabaseRepository implements Repository {
   }
 
   async exportSnapshot(): Promise<Snapshot> {
-    const [ex, rec, bud, cats, learn, gen, rules] = await Promise.all([
+    const [ex, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
       this.listTransactions(),
       this.listRecurring(),
       this.getBudgets(),
       this.getCategories(),
+      this.getSubcategories(),
       this.getLearnedCategories(),
       this.getGeneratedMonths(),
       this.listKeywordRules(),
     ]);
-    return { ex, rec, bud, cats, learn, gen, rules: rules.map(({ keyword, category }) => ({ keyword, category })) };
+    return { ex, rec, bud, cats, subs, learn, gen, rules: rules.map(({ keyword, category }) => ({ keyword, category })) };
   }
 
   async importSnapshot(data: Partial<Snapshot>, { replace }: { replace: boolean }): Promise<ImportResult> {

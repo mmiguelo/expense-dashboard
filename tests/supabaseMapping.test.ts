@@ -6,11 +6,24 @@ import type { RecurringExpense, Transaction } from '../src/types';
 describe('row mapping', () => {
   it('round-trips transactions', () => {
     const tx: Transaction = { id: 'a', date: '2026-03-01', amount: 12.5, desc: 'Lidl', cat: 'Groceries', type: 'e', tags: 'x' };
-    expect(txToRow(tx)).toEqual({ id: 'a', date: '2026-03-01', amount: 12.5, type: 'expense', category: 'Groceries', description: 'Lidl', tags: 'x', fixed: false });
+    expect(txToRow(tx)).toEqual({
+      id: 'a',
+      date: '2026-03-01',
+      amount: 12.5,
+      type: 'expense',
+      category: 'Groceries',
+      subcategory: '',
+      description: 'Lidl',
+      tags: 'x',
+      fixed: false,
+    });
     expect(txFromRow(txToRow(tx))).toEqual(tx);
     const fixed: Transaction = { ...tx, type: 'e', fixed: 1 };
     expect(txFromRow(txToRow(fixed))).toEqual(fixed);
-    const income: Transaction = { ...tx, type: 'i', cat: 'Income' };
+    const withSub: Transaction = { ...tx, sub: 'Supermercado' };
+    expect(txToRow(withSub).subcategory).toBe('Supermercado');
+    expect(txFromRow(txToRow(withSub))).toEqual(withSub);
+    const income: Transaction = { ...tx, type: 'i', cat: 'Rendimentos' };
     expect(txToRow(income).type).toBe('income');
     expect(txFromRow(txToRow(income))).toEqual(income);
   });
@@ -23,6 +36,7 @@ describe('row mapping', () => {
     const r: RecurringExpense = { id: 'r', desc: 'Gym', amount: 30, cat: 'Gym', day: 31, start: '2026-04' };
     expect(ruleToRow(r).start_month).toBe('2026-04-01');
     expect(ruleFromRow(ruleToRow(r))).toEqual(r);
+    expect(ruleFromRow(ruleToRow({ ...r, sub: 'Desporto' }))).toEqual({ ...r, sub: 'Desporto' });
   });
 });
 
@@ -37,8 +51,10 @@ describe('toImportPayload', () => {
       learn: { lidl: 'Groceries' },
     });
     expect(p).toEqual({
-      transactions: [{ source_id: '1773828000000.123', date: '2026-03-01', amount: 5, type: 'expense', category: 'Fuel', description: 'Old', tags: '', fixed: true }],
-      recurring: [{ source_id: 'r1', description: 'Gym', amount: 30, category: 'Gym', day: 31, start_month: '2026-01-01' }],
+      transactions: [
+        { source_id: '1773828000000.123', date: '2026-03-01', amount: 5, type: 'expense', category: 'Fuel', subcategory: '', description: 'Old', tags: '', fixed: true },
+      ],
+      recurring: [{ source_id: 'r1', description: 'Gym', amount: 30, category: 'Gym', subcategory: '', day: 31, start_month: '2026-01-01' }],
       occurrences: [
         { recurring_source_id: 'r1', month: '2026-01-01' },
         { recurring_source_id: 'r1', month: '2026-02-01' },
@@ -60,6 +76,18 @@ describe('toImportPayload', () => {
     ).toEqual([{ keyword: 'vet ', category: 'Pets' }]);
   });
 
+  it('includes subcategories, and puts income in Rendimentos', () => {
+    const p = toImportPayload({
+      ex: [{ id: '1', date: '2026-03-01', amount: 900, desc: 'Salary', cat: 'Income', type: 'i' }],
+      subs: { Habitação: ['Água', '', 'Gás'] },
+    });
+    expect(p.subcategories).toEqual([
+      { category: 'Habitação', name: 'Água' },
+      { category: 'Habitação', name: 'Gás' },
+    ]);
+    expect(p.transactions![0]).toMatchObject({ type: 'income', category: 'Rendimentos', subcategory: '' });
+  });
+
   it('includes only the parts present, so a replace import keeps the rest', () => {
     expect(Object.keys(toImportPayload({ ex: [] }))).toEqual(['transactions']);
   });
@@ -77,7 +105,7 @@ describe('toImportPayload', () => {
     });
     expect(p.transactions!.map((t) => t.source_id)).toEqual(['4']);
     expect(p.budgets).toEqual([]);
-    expect(p.categories).toEqual([{ name: 'Pets', color: '#9aa5b5' }]);
+    expect(p.categories).toEqual([{ name: 'Pets', color: '#a39b8b' }]);
   });
 });
 
@@ -93,7 +121,7 @@ describe('readSupabaseConfig', () => {
   });
 
   it('fails clearly when not configured', () => {
-    expect(() => readSupabaseConfig({})).toThrow(/not configured/);
+    expect(() => readSupabaseConfig({})).toThrow(/não está configurado/);
   });
 
   it('refuses secret keys', () => {

@@ -1,117 +1,120 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Expense Dashboard</title>
+<!-- Texts are in Portuguese here and come from src/i18n at startup (data-i18n* attributes), so other languages can be added there. -->
+<html lang="pt"><head><meta charset="utf-8"><title>Painel de despesas</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
 </head><body>
-<div class="gate" id="loading"><p class="mute">Loading…</p></div>
+<div class="gate" id="loading"><p class="mute" data-i18n="page.loading">A carregar…</p></div>
 
-<div class="gate" id="configError" hidden><section class="card"><h1>Expense dashboard</h1><p id="configMsg"></p></section></div>
+<div class="gate" id="configError" hidden><section class="card"><h1 data-i18n="page.title">Painel de despesas</h1><p id="configMsg"></p></section></div>
 
 <div class="gate" id="auth" hidden><section class="card">
-<h1>Expense dashboard</h1>
-<p class="mute" id="authIntro">Sign in to see your expenses on any device.</p>
+<h1 data-i18n="page.title">Painel de despesas</h1>
+<p class="mute" id="authIntro" data-i18n="auth.signin.intro">Inicie sessão para ver as suas despesas em qualquer dispositivo.</p>
 <form id="authForm" class="stack" novalidate>
-<label>Email<input type="email" id="authEmail" autocomplete="email" required></label>
-<label id="authPassLabel">Password<input type="password" id="authPass" autocomplete="current-password" minlength="8" required></label>
-<button type="submit" class="pr" id="authSubmit">Sign in</button>
+<label><span data-i18n="auth.email">Email</span><input type="email" id="authEmail" autocomplete="email" required></label>
+<label id="authPassLabel"><span data-i18n="auth.password">Palavra-passe</span><input type="password" id="authPass" autocomplete="current-password" minlength="8" required></label>
+<button type="submit" class="pr" id="authSubmit" data-i18n="auth.signin.submit">Iniciar sessão</button>
 </form>
 <p class="authmsg" id="authMsg" role="status" aria-live="polite"></p>
-<p class="authlinks" id="authResendRow" hidden><button type="button" id="authResend">Resend confirmation email</button></p>
-<p class="mute authlinks"><button type="button" class="link" id="authSwitch">Create an account</button> · <button type="button" class="link" id="authForgot">Forgot password?</button></p>
+<p class="authlinks" id="authResendRow" hidden><button type="button" id="authResend" data-i18n="auth.resend">Reenviar email de confirmação</button></p>
+<p class="mute authlinks"><button type="button" class="link" id="authSwitch" data-i18n="auth.signin.switch">Criar conta</button> · <button type="button" class="link" id="authForgot" data-i18n="auth.forgot">Esqueceu-se da palavra-passe?</button></p>
 </section></div>
 
 <div class="gate" id="recovery" hidden><section class="card">
-<h1>Choose a new password</h1>
+<h1 data-i18n="recovery.title">Escolha uma nova palavra-passe</h1>
 <form id="recoveryForm" class="stack" novalidate>
-<label>New password<input type="password" id="newPass" autocomplete="new-password" minlength="8" required></label>
-<button type="submit" class="pr">Save password</button>
+<label><span data-i18n="recovery.newPassword">Nova palavra-passe</span><input type="password" id="newPass" autocomplete="new-password" minlength="8" required></label>
+<button type="submit" class="pr" data-i18n="recovery.save">Guardar palavra-passe</button>
 </form>
 <p class="authmsg" id="recoveryMsg" role="status" aria-live="polite"></p>
 </section></div>
 
 <div class="gate" id="deactivated" hidden><section class="card">
-<h1>Your account has been deactivated</h1>
-<p>You can't use the dashboard right now. Your data has not been deleted: if an administrator reactivates your account, everything will be as you left it.</p>
+<h1 data-i18n="deactivated.title">A sua conta foi desativada</h1>
+<p data-i18n="deactivated.text">De momento não pode usar o painel. Os seus dados não foram apagados: se um administrador reativar a sua conta, tudo estará como deixou.</p>
 <p class="mute" id="deactivatedWho"></p>
-<button type="button" id="deactivatedLogout">Log out</button>
+<button type="button" id="deactivatedLogout" data-i18n="account.logout">Terminar sessão</button>
 </section></div>
 
 <main id="app" hidden>
-<header class="top"><h1>Expense dashboard</h1>
-<nav class="seg views" id="views" aria-label="Screens"><button type="button" data-view="dashboard" class="on">Dashboard</button><button type="button" data-view="settings">Settings</button><button type="button" data-view="admin" id="adminNav" hidden>Admin</button></nav>
-<details class="acct" id="acct"><summary aria-label="Account"><span id="who"></span></summary>
-<div class="acctmenu"><div class="mute">Signed in as</div><div id="acctEmail"></div><div><span class="badge" id="acctRole"></span></div><button type="button" id="logout">Log out</button></div></details>
+<header class="top"><h1 data-i18n="page.title">Painel de despesas</h1>
+<nav class="seg views" id="views" aria-label="Ecrãs" data-i18n-aria-label="nav.screens"><button type="button" data-view="dashboard" class="on" data-i18n="nav.dashboard">Painel</button><button type="button" data-view="settings" data-i18n="nav.settings">Definições</button><button type="button" data-view="admin" id="adminNav" hidden data-i18n="nav.admin">Administração</button></nav>
+<details class="acct" id="acct"><summary aria-label="Conta" data-i18n-aria-label="account.menu"><span id="who"></span></summary>
+<div class="acctmenu"><div class="mute" data-i18n="account.signedInAsLabel">Sessão iniciada como</div><div id="acctEmail"></div><div><span class="badge" id="acctRole"></span></div><button type="button" id="logout" data-i18n="account.logout">Terminar sessão</button></div></details>
 </header>
-<section class="card" id="localImport" hidden><h2>Data from before you had an account</h2>
+<section class="card" id="localImport" hidden><h2 data-i18n="localImport.title">Dados de antes de ter conta</h2>
 <p class="mute" id="localImportText"></p>
-<div class="fg"><button type="button" class="pr" id="localImportBtn">Import my existing local data</button><button type="button" id="localImportLater">Not now</button></div></section>
+<div class="fg"><button type="button" class="pr" id="localImportBtn" data-i18n="localImport.button">Importar os meus dados locais</button><button type="button" id="localImportLater" data-i18n="localImport.later">Agora não</button></div></section>
 <div id="viewDashboard">
-<section class="card"><h2 id="fT">Add a transaction</h2>
+<section class="card"><h2 id="fT" data-i18n="form.addTitle">Adicionar movimento</h2>
 <div id="f" class="fg">
-<label>Type<select id="type"><option value="e">Expense</option><option value="i">Income</option></select></label>
-<label>Date<input type="date" id="date" required></label>
-<label>Amount (€)<input id="amt" inputmode="decimal" required placeholder="0,00"></label>
-<label>Description<input id="desc" autocomplete="off" placeholder="e.g. Pingo Doce"></label>
-<label>Category<select id="cat"></select></label>
-<label>Tags / notes<input id="tags" placeholder="holiday, shared"></label>
-<button type="button" class="pr" id="sub">Add</button><button type="button" id="cancel" hidden>Cancel edit</button>
+<label><span data-i18n="form.type">Tipo</span><select id="type"><option value="e" data-i18n="form.expense">Despesa</option><option value="i" data-i18n="form.income">Receita</option></select></label>
+<label><span data-i18n="form.date">Data</span><span class="datefield"><input id="date" inputmode="numeric" autocomplete="off" required placeholder="dd/mm/aaaa" data-i18n-placeholder="form.datePlaceholder"><button type="button" class="calbtn" id="dateBtn" aria-label="Escolher no calendário" data-i18n-aria-label="form.pickDate" title="Escolher no calendário" data-i18n-title="form.pickDate"></button><input type="date" id="datePick" tabindex="-1" aria-hidden="true"></span></label>
+<label><span data-i18n="form.amount">Valor (€)</span><input id="amt" inputmode="decimal" required placeholder="0,00"></label>
+<label><span data-i18n="form.description">Descrição</span><input id="desc" autocomplete="off" placeholder="ex.: Mercearia da esquina" data-i18n-placeholder="form.descriptionPlaceholder"></label>
+<label><span data-i18n="form.category">Categoria</span><select id="cat"></select></label>
+<label><span data-i18n="form.subcategory">Subcategoria</span><select id="subcat"></select></label>
+<label><span data-i18n="form.tags">Etiquetas / notas</span><input id="tags" placeholder="férias, partilhado" data-i18n-placeholder="form.tagsPlaceholder"></label>
+<button type="button" class="pr" id="sub" data-i18n="form.add">Adicionar</button><button type="button" id="cancel" hidden data-i18n="form.cancelEdit">Cancelar edição</button>
 </div><div class="chips" id="chips"></div></section>
 
-<div class="tabs"><div class="seg" id="modes"><button data-m="day">Day</button><button data-m="month" class="on">Month</button><button data-m="year">Year</button></div>
-<div class="nav"><button id="prev" aria-label="Previous">‹</button><span id="lbl"></span><button id="next" aria-label="Next">›</button><button id="today">Today</button></div></div>
+<div class="tabs"><div class="seg" id="modes"><button data-m="day" data-i18n="period.day">Dia</button><button data-m="month" class="on" data-i18n="period.month">Mês</button><button data-m="year" data-i18n="period.year">Ano</button></div>
+<div class="nav"><button id="prev" aria-label="Anterior" data-i18n-aria-label="period.previous">‹</button><span id="lbl"></span><button id="next" aria-label="Seguinte" data-i18n-aria-label="period.next">›</button><button id="today" data-i18n="period.today">Hoje</button></div></div>
 
 <section class="card" id="sum"></section>
 <div class="g2"><section class="card"><h2 id="tT"></h2><div class="chart" id="trend"></div></section>
-<section class="card"><h2>Category share</h2><div id="donut"></div></section></div>
-<section class="card"><h2>Categories, budgets and change vs previous period</h2><div id="cats"></div></section>
-<div class="g2"><section class="card" id="heatC"><h2>Spending heatmap</h2><div class="heat" id="heat"></div></section>
-<section class="card"><h2>Top merchants</h2><div id="top"></div></section></div>
-<section class="card"><h2>Transactions</h2>
-<div class="fg" style="margin-bottom:8px"><input id="q" placeholder="Search text, tags, amount…"><select id="fc"></select></div><div id="list"></div></section>
+<section class="card"><h2 data-i18n="dash.categoryShare">Distribuição por categoria</h2><div id="donut"></div></section></div>
+<section class="card"><h2 data-i18n="dash.categories">Categorias, orçamentos e variação face ao período anterior</h2><div id="cats"></div></section>
+<div class="g2"><section class="card" id="heatC"><h2 data-i18n="dash.heatmap">Mapa de gastos</h2><div class="heat" id="heat"></div></section>
+<section class="card"><h2 data-i18n="dash.topMerchants">Onde gasta mais</h2><div id="top"></div></section></div>
+<section class="card"><h2 data-i18n="dash.transactions">Movimentos</h2>
+<div class="fg" style="margin-bottom:8px"><input id="q" placeholder="Pesquisar texto, etiquetas, valor…" data-i18n-placeholder="dash.search"><select id="fc"></select></div><div id="list"></div></section>
 
 </div>
 
 <div id="viewSettings" hidden>
-<section class="card"><h2>Categories</h2>
-<p class="mute">Renaming or deleting a category updates your transactions, recurring expenses, rules and budgets.</p>
+<section class="card fold folded" id="secCategories"><h2><button type="button" class="foldbtn" aria-expanded="false" aria-controls="secCategories" data-i18n-title="common.expand" title="Mostrar mais"><span data-i18n="settings.categories">Categorias</span></button></h2>
+<p class="mute" data-i18n="settings.categoriesHelp">Mudar o nome ou apagar uma categoria atualiza os seus movimentos, despesas fixas, regras e orçamentos.</p>
 <div id="catList"></div>
-<div class="fg" style="margin-top:10px"><label>New category<input id="nc" placeholder="e.g. Pets" maxlength="100"></label><label>Colour<input type="color" id="ncc" value="#0a8f8f"></label><button type="button" id="ncb">Add category</button></div>
+<div class="fg" style="margin-top:10px"><label><span data-i18n="settings.newCategory">Nova categoria</span><input id="nc" placeholder="ex.: Animais" data-i18n-placeholder="settings.newCategoryPlaceholder" maxlength="100"></label><label><span data-i18n="settings.colour">Cor</span><input type="color" id="ncc" value="#8b6b56"></label><button type="button" id="ncb" data-i18n="settings.addCategory">Adicionar categoria</button></div>
 <div class="card warnbox" id="catDelete" hidden><p id="catDeleteText"></p>
-<div class="fg"><label id="catDeleteMoveLabel">Move them to<select id="catDeleteTo"></select></label><button type="button" class="danger" id="catDeleteOk">Delete</button><button type="button" id="catDeleteCancel">Cancel</button></div></div>
+<div class="fg"><label id="catDeleteMoveLabel"><span data-i18n="settings.moveTo">Mover para</span><select id="catDeleteTo"></select></label><button type="button" class="danger" id="catDeleteOk" data-i18n="common.delete">Apagar</button><button type="button" id="catDeleteCancel" data-i18n="common.cancel">Cancelar</button></div></div>
 </section>
 
-<section class="card"><h2>Auto-categorization rules</h2>
-<p class="mute">When a description contains the keyword, that category is suggested. The first matching rule wins. End a keyword with a space to match only whole words.</p>
-<div class="fg"><label>Keyword<input id="kwNew" placeholder="e.g. vet" maxlength="100"></label><label>Category<select id="kwNewCat"></select></label><button type="button" id="kwAdd">Add rule</button></div>
-<div class="fg" style="margin-top:8px"><input id="kwFilter" placeholder="Filter rules…"></div>
+<section class="card fold folded" id="secRules"><h2><button type="button" class="foldbtn" aria-expanded="false" aria-controls="secRules" data-i18n-title="common.expand" title="Mostrar mais"><span data-i18n="settings.rules">Regras de categorização automática</span></button></h2>
+<p class="mute" data-i18n="settings.rulesHelp">Quando a descrição contém a palavra-chave, é sugerida essa categoria.</p>
+<div class="fg"><label><span data-i18n="settings.keyword">Palavra-chave</span><input id="kwNew" placeholder="ex.: veterinário" data-i18n-placeholder="settings.keywordPlaceholder" maxlength="100"></label><label><span data-i18n="form.category">Categoria</span><select id="kwNewCat"></select></label><button type="button" id="kwAdd" data-i18n="settings.addRule">Adicionar regra</button></div>
+<div class="fg" style="margin-top:8px"><input id="kwFilter" placeholder="Filtrar regras…" data-i18n-placeholder="settings.filterRules"></div>
 <div id="kwList" class="scrollbox"></div>
 </section>
 
-<section class="card"><h2>Monthly budget per category (€, empty = none)</h2><div class="bg" id="bud"></div></section>
+<section class="card fold folded" id="secBudgets"><h2><button type="button" class="foldbtn" aria-expanded="false" aria-controls="secBudgets" data-i18n-title="common.expand" title="Mostrar mais"><span data-i18n="settings.budgets">Orçamento mensal por categoria (€, vazio = sem orçamento)</span></button></h2><div class="bg" id="bud"></div></section>
 
-<section class="card"><h2>Recurring monthly expenses</h2>
-<div id="rf" class="fg"><label>Description<input id="rd" required></label><label>Amount (€)<input id="ra" inputmode="decimal" required></label><label>Category<select id="rc"></select></label><label>Day of month<input id="rday" type="number" min="1" max="31" value="1"></label><button type="button" class="pr" id="rb">Add recurring</button></div>
+<section class="card fold folded" id="secRecurring"><h2><button type="button" class="foldbtn" aria-expanded="false" aria-controls="secRecurring" data-i18n-title="common.expand" title="Mostrar mais"><span data-i18n="settings.recurring">Despesas fixas mensais</span></button></h2>
+<div id="rf" class="fg"><label><span data-i18n="form.description">Descrição</span><input id="rd" required></label><label><span data-i18n="form.amount">Valor (€)</span><input id="ra" inputmode="decimal" required></label><label><span data-i18n="form.category">Categoria</span><select id="rc"></select></label><label><span data-i18n="form.subcategory">Subcategoria</span><select id="rsub"></select></label><label><span data-i18n="settings.dayOfMonth">Dia do mês</span><input id="rday" type="number" min="1" max="31" value="1"></label><button type="button" class="pr" id="rb" data-i18n="settings.addRecurring">Adicionar despesa fixa</button></div>
 <div id="rlist" style="margin-top:8px"></div></section>
 
-<section class="card"><h2>Backup</h2><div class="fg"><button id="xj">Export JSON</button><button id="xc">Export CSV</button><label style="flex-direction:row;align-items:center"><span>Import JSON (replaces your data)</span><input type="file" id="imp" accept=".json"></label><label style="flex-direction:row;align-items:center"><span>Add JSON backup (skips duplicates)</span><input type="file" id="impMerge" accept=".json"></label><button type="button" id="localImportSettings" hidden>Import my existing local data</button></div>
-<p class="mute">Your data is saved to your account and synced across your devices. Exporting a backup now and then is still a good idea.</p></section>
+<section class="card fold folded" id="secBackup"><h2><button type="button" class="foldbtn" aria-expanded="false" aria-controls="secBackup" data-i18n-title="common.expand" title="Mostrar mais"><span data-i18n="settings.backup">Cópia de segurança</span></button></h2><div class="fg"><button id="xj" data-i18n="settings.exportJson">Exportar JSON</button><button id="xc" data-i18n="settings.exportCsv">Exportar CSV</button><label style="flex-direction:row;align-items:center"><span data-i18n="settings.importReplace">Importar JSON (substitui os seus dados)</span><input type="file" id="imp" accept=".json"></label><label style="flex-direction:row;align-items:center"><span data-i18n="settings.importMerge">Adicionar cópia JSON (ignora duplicados)</span><input type="file" id="impMerge" accept=".json"></label><button type="button" id="localImportSettings" hidden data-i18n="localImport.button">Importar os meus dados locais</button></div>
+<p class="mute" data-i18n="settings.backupHelp">Os seus dados ficam guardados na sua conta e sincronizados entre dispositivos.</p></section>
 </div>
 
 <div id="viewAdmin" hidden>
-<div class="seg" id="adminTabs" style="margin-bottom:14px;width:max-content"><button type="button" data-tab="users" class="on">Users</button><button type="button" data-tab="defaults">Defaults</button></div>
-<section class="card" id="adminUsers"><h2>Accounts</h2>
-<p class="mute">You see account details only, never anyone's expenses. Deactivating blocks the account immediately and keeps its data; reactivating restores it.</p>
-<div class="tablewrap"><table class="grid"><thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div></section>
+<div class="seg" id="adminTabs" style="margin-bottom:14px;width:max-content"><button type="button" data-tab="users" class="on" data-i18n="admin.users">Utilizadores</button><button type="button" data-tab="defaults" data-i18n="admin.defaults">Predefinições</button></div>
+<section class="card" id="adminUsers"><h2 data-i18n="admin.accounts">Contas</h2>
+<p class="mute" data-i18n="admin.accountsHelp">Só vê os dados das contas, nunca as despesas de ninguém.</p>
+<div class="tablewrap"><table class="grid"><thead><tr><th data-i18n="admin.colEmail">Email</th><th data-i18n="admin.colName">Nome</th><th data-i18n="admin.colRole">Perfil</th><th data-i18n="admin.colStatus">Estado</th><th data-i18n="admin.colCreated">Criada em</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div></section>
 <div id="adminDefaults" hidden>
-<section class="card"><h2>Default categories</h2>
-<p class="mute">New accounts start with these. Changes don't affect existing accounts.</p>
+<section class="card"><h2 data-i18n="admin.defaultCategories">Categorias predefinidas</h2>
+<p class="mute" data-i18n="admin.defaultCategoriesHelp">As contas novas começam com estas.</p>
 <div id="defCatList"></div>
-<div class="fg" style="margin-top:10px"><label>New category<input id="dcName" maxlength="100"></label><label>Colour<input type="color" id="dcColor" value="#0a8f8f"></label><button type="button" id="dcAdd">Add default category</button></div></section>
-<section class="card"><h2>Default auto-categorization rules</h2>
-<div class="fg"><label>Keyword<input id="dkKeyword" maxlength="100"></label><label>Category<select id="dkCat"></select></label><button type="button" id="dkAdd">Add default rule</button></div>
-<div class="fg" style="margin-top:8px"><input id="dkFilter" placeholder="Filter rules…"></div>
+<div class="fg" style="margin-top:10px"><label><span data-i18n="settings.newCategory">Nova categoria</span><input id="dcName" maxlength="100"></label><label><span data-i18n="settings.colour">Cor</span><input type="color" id="dcColor" value="#8b6b56"></label><button type="button" id="dcAdd" data-i18n="admin.addDefaultCategory">Adicionar categoria predefinida</button></div></section>
+<section class="card"><h2 data-i18n="admin.defaultRules">Regras de categorização predefinidas</h2>
+<div class="fg"><label><span data-i18n="settings.keyword">Palavra-chave</span><input id="dkKeyword" maxlength="100"></label><label><span data-i18n="form.category">Categoria</span><select id="dkCat"></select></label><button type="button" id="dkAdd" data-i18n="admin.addDefaultRule">Adicionar regra predefinida</button></div>
+<div class="fg" style="margin-top:8px"><input id="dkFilter" placeholder="Filtrar regras…" data-i18n-placeholder="settings.filterRules"></div>
 <div id="defKwList" class="scrollbox"></div></section>
 </div>
 </div>
-</main><div class="toast" id="toast"><span id="tm"></span><button id="undo">Undo</button></div>
+</main><div class="toast" id="toast"><span id="tm"></span><button id="undo" data-i18n="common.undo">Anular</button></div>
 <script type="module" src="/src/main.ts"></script></body></html>

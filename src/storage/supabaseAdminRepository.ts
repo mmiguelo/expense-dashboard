@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeKeyword } from '../categories';
+import { t } from '../i18n';
 import type { Profile } from '../types';
 import type { AdminRepository, DefaultCategory, DefaultKeywordRule } from './adminRepository';
 import { profileFromRow, toError, type ProfileRow } from './supabaseRepository';
@@ -30,7 +31,7 @@ export class SupabaseAdminRepository implements AdminRepository {
     if (changes.displayName !== undefined) row.display_name = changes.displayName;
     const { data, error } = await this.db.from('profiles').update(row).eq('id', id).select('id');
     if (error) throw toError(error);
-    if (!data?.length) throw new Error('Not allowed to change this account.');
+    if (!data?.length) throw new Error(t('admin.err.notAllowed'));
   }
 
   async listDefaultCategories(): Promise<DefaultCategory[]> {

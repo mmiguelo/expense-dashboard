@@ -1,6 +1,6 @@
 import type { Snapshot, Transaction } from './types';
 
-export const CSV_HEADER = 'date,type,amount,category,description,tags,fixed';
+export const CSV_HEADER = 'date,type,amount,category,subcategory,description,tags,fixed';
 
 export function toCsv(transactions: Transaction[]): string {
   const rows = transactions.map((x) =>
@@ -9,6 +9,7 @@ export function toCsv(transactions: Transaction[]): string {
       x.type === 'i' ? 'income' : 'expense',
       x.amount,
       x.cat,
+      '"' + String(x.sub || '').replace(/"/g, '""') + '"',
       '"' + String(x.desc).replace(/"/g, '""') + '"',
       '"' + (x.tags || '') + '"',
       x.fixed ? 1 : 0,

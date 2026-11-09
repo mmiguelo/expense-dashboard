@@ -16,7 +16,7 @@ const tx = (over: Partial<Transaction> = {}): Transaction => ({
   date: '2026-03-02',
   amount: 12.5,
   desc: 'Lidl',
-  cat: 'Groceries',
+  cat: 'Alimentação',
   type: 'e',
   tags: '',
   ...over,
@@ -43,12 +43,12 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
       const rules = await repo.listKeywordRules();
       const [{ n }] = await sql<{ n: number }>('select count(*)::int as n from public.default_keyword_rules');
       expect(rules).toHaveLength(n);
-      expect(rules.find((r) => r.keyword === 'pingo doce')?.category).toBe('Groceries');
+      expect(rules.find((r) => r.keyword === 'pingo doce')?.category).toBe('Alimentação');
     });
 
     it('saves, updates, lists in insertion order and deletes transactions', async () => {
       const a = tx({ desc: 'First' });
-      const b = tx({ desc: 'Second', type: 'i', cat: 'Income', tags: 'salary' });
+      const b = tx({ desc: 'Second', type: 'i', cat: 'Rendimentos', tags: 'salary' });
       await repo.saveTransaction(a);
       await repo.saveTransaction(b);
       await repo.saveTransaction({ ...a, amount: 99.99, fixed: 1 });
@@ -65,8 +65,8 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
       await repo.setBudget('Fuel', null);
       expect(await repo.getBudgets()).toEqual({ Gym: 40 });
       await repo.learnCategory('Kiosk Central', 'Leisure');
-      await repo.learnCategory('kiosk central', 'Shopping');
-      expect(await repo.getLearnedCategories()).toEqual({ 'kiosk central': 'Shopping' });
+      await repo.learnCategory('kiosk central', 'Lazer');
+      expect(await repo.getLearnedCategories()).toEqual({ 'kiosk central': 'Lazer' });
     });
 
     it('adds, changes and deletes keyword rules', async () => {
@@ -84,18 +84,45 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
     it('renames and deletes categories, keeping transactions consistent', async () => {
       const user2 = await signUp();
       const r = repoOf(user2);
-      await r.saveTransaction(tx({ desc: 'Bread', cat: 'Groceries' }));
-      await r.setBudget('Groceries', 200);
-      await r.renameCategory('Groceries', 'Food');
+      await r.saveTransaction(tx({ desc: 'Bread', cat: 'Alimentação' }));
+      await r.setBudget('Alimentação', 200);
+      await r.renameCategory('Alimentação', 'Food');
       expect((await r.listTransactions())[0]!.cat).toBe('Food');
       expect(await r.getBudgets()).toEqual({ Food: 200 });
       expect((await r.listKeywordRules()).find((k) => k.keyword === 'lidl')?.category).toBe('Food');
 
       await expect(r.deleteCategory('Food', null)).rejects.toThrow(/still used/);
-      await r.deleteCategory('Food', 'Shopping');
-      expect((await r.listTransactions())[0]!.cat).toBe('Shopping');
+      await r.deleteCategory('Food', 'Lazer');
+      expect((await r.listTransactions())[0]!.cat).toBe('Lazer');
       expect(await r.getBudgets()).toEqual({});
       expect('Food' in (await r.getCategories())).toBe(false);
+    });
+
+    it('has subcategories: defaults, add, delete, and on transactions and recurring expenses', async () => {
+      const r = repoOf(await signUp());
+      const subs = await r.getSubcategories();
+      expect(subs['Rendimentos']).toEqual(['Mais-Valias', 'Salário', 'Subsídios', 'Taxas & Impostos', 'Vendas']);
+      expect(subs['Alimentação']).toEqual(['Mercearia', 'Peixaria', 'Supermercado', 'Talho']);
+
+      await r.addSubcategory('Alimentação', 'Padaria');
+      expect((await r.getSubcategories())['Alimentação']).toContain('Padaria');
+      await expect(r.addSubcategory('Alimentação', 'Padaria')).rejects.toThrow();
+      await expect(r.addSubcategory('No such category', 'X')).rejects.toThrow();
+
+      const bread = tx({ desc: 'Pão', sub: 'Padaria' });
+      await r.saveTransaction(bread);
+      await r.saveRecurring({ id: crypto.randomUUID(), desc: 'Cabaz', amount: 20, cat: 'Alimentação', sub: 'Padaria', day: 1, start: '2026-03' });
+      expect(await r.listTransactions()).toEqual([bread]);
+      expect((await r.listRecurring())[0]!.sub).toBe('Padaria');
+
+      await r.deleteSubcategory('Alimentação', 'Padaria');
+      expect((await r.getSubcategories())['Alimentação']).not.toContain('Padaria');
+      const { sub: _gone, ...withoutSub } = bread;
+      expect((await r.listTransactions())[0]).toEqual(withoutSub);
+      expect((await r.listRecurring())[0]!.sub).toBeUndefined();
+
+      const snapshot = await r.exportSnapshot();
+      expect(snapshot.subs?.['Saúde']).toContain('Farmácia');
     });
 
     it('lists more than one page of transactions', async () => {
@@ -146,9 +173,9 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
       ],
       rec: [{ id: 'r1773828000000', desc: 'Mortgage', amount: 650, cat: 'Mortgage', day: 1, start: '2026-03' }],
       gen: { 'r17738280000002026-03': 1 as const },
-      bud: { Groceries: 100 },
+      bud: { Alimentação: 100 },
       cats: { Takeaway: '#c05299' },
-      learn: { lidl: 'Groceries' },
+      learn: { lidl: 'Alimentação' },
     };
 
     it('imports everything, and importing again adds nothing', async () => {
@@ -163,7 +190,7 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
     it("an export, keyword rules included, re-imports into another account", async () => {
       const a = repoOf(await signUp());
       await a.saveTransaction(tx());
-      await a.saveKeywordRule({ keyword: 'zzz shop', category: 'Shopping' });
+      await a.saveKeywordRule({ keyword: 'zzz shop', category: 'Lazer' });
       const backup = await a.exportSnapshot();
       expect(await a.importSnapshot(backup, { replace: false })).toEqual({ transactions: 0, skipped: 1 });
 
@@ -183,7 +210,7 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
       [alice, bob] = await Promise.all([signUp('alice'), signUp('bob')]);
       aliceTx = tx({ desc: 'Alice secret' });
       await repoOf(alice).saveTransaction(aliceTx);
-      await repoOf(alice).setBudget('Groceries', 300);
+      await repoOf(alice).setBudget('Alimentação', 300);
     });
 
     it('Bob reads none of Alice’s rows, in any table, and only his own profile', async () => {

@@ -10,12 +10,24 @@ import {
   trendBars,
 } from '../analytics';
 import { toCsv, parseBackup } from '../backup';
-import { guessCategory, INCOME_CATEGORY, missingCategories, nextCategoryColor } from '../categories';
-import { shiftRef, toIsoDate } from '../dates';
+import { expenseCategoryNames, guessCategory, guessSubcategory, INCOME_CATEGORY, isIncomeCategory, missingCategories, nextCategoryColor } from '../categories';
+import { formatDmy, parseDmy, shiftRef, toIsoDate } from '../dates';
 import { amountToInput, parseAmount } from '../format';
+import { t, tn, translateError } from '../i18n';
 import { generateRecurring } from '../recurring';
 import type { Repository } from '../storage/repository';
-import type { Budgets, Categories, GeneratedMonths, KeywordRule, LearnedCategories, Mode, RecurringExpense, Transaction, TxType } from '../types';
+import type {
+  Budgets,
+  Categories,
+  GeneratedMonths,
+  KeywordRule,
+  LearnedCategories,
+  Mode,
+  RecurringExpense,
+  Subcategories,
+  Transaction,
+  TxType,
+} from '../types';
 import * as html from './render';
 
 export interface AppOptions {
@@ -39,6 +51,7 @@ interface Data {
   rec: RecurringExpense[];
   bud: Budgets;
   cats: Categories;
+  subs: Subcategories;
   learn: LearnedCategories;
   gen: GeneratedMonths;
   rules: KeywordRule[];
@@ -49,13 +62,21 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   const $ = <T extends HTMLElement = HTMLInputElement>(id: string) => doc.getElementById(id) as T;
   const sel = (id: string) => $<HTMLSelectElement>(id);
   const today = () => toIsoDate(clock());
+  /** The form's date field shows dd/mm/yyyy; these convert to and from YYYY-MM-DD. */
+  const setFormDate = (iso: string) => {
+    $('date').value = formatDmy(iso);
+    $('date').setCustomValidity('');
+  };
+  const formDate = () => parseDmy($('date').value);
   const newId = () => crypto.randomUUID();
 
-  let data: Data = { txs: [], rec: [], bud: {}, cats: {}, learn: {}, gen: {}, rules: [] };
+  let data: Data = { txs: [], rec: [], bud: {}, cats: {}, subs: {}, learn: {}, gen: {}, rules: [] };
   let mode: Mode = 'month';
   let ref = today();
   /** The user picked a category by hand, so stop auto-guessing it. */
   let touched = false;
+  /** Same for the subcategory. */
+  let subTouched = false;
   let editId: string | null = null;
   let lastDeleted: Transaction | null = null;
   let toastTimer: number | undefined;
@@ -63,12 +84,13 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   let deleting: string | null = null;
 
   async function load(): Promise<void> {
-    const [profile, txs, rec, bud, cats, learn, gen, rules] = await Promise.all([
+    const [profile, txs, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
       repo.getProfile(),
       repo.listTransactions(),
       repo.listRecurring(),
       repo.getBudgets(),
       repo.getCategories(),
+      repo.getSubcategories(),
       repo.getLearnedCategories(),
       repo.getGeneratedMonths(),
       repo.listKeywordRules(),
@@ -76,9 +98,9 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     if (!profile.active) {
       // The database already returns nothing; show why.
       onDeactivated?.();
-      throw new Error('Your account has been deactivated.');
+      throw new Error(t('err.deactivated'));
     }
-    data = { txs, rec, bud, cats, learn, gen, rules };
+    data = { txs, rec, bud, cats, subs, learn, gen, rules };
   }
 
   async function generateDueRecurring(): Promise<void> {
@@ -116,21 +138,40 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
 
   function failed(e: unknown): void {
     console.error(e);
-    toast(`Couldn't save: ${(e as Error)?.message ?? e}. Check your connection and try again.`);
+    toast(t('err.save', { message: translateError(String((e as Error)?.message ?? e)) }));
   }
 
   // ---- rendering ----
 
+  /** Fill a subcategory select with `category`'s subcategories, keeping `value` if it is one. */
+  function fillSubs(id: string, category: string, value = sel(id).value): void {
+    const s = sel(id);
+    s.innerHTML = html.subcategoryOptions(data.subs[category]);
+    s.value = data.subs[category]?.includes(value) ? value : '';
+    s.disabled = !data.subs[category]?.length;
+  }
+
+  /** The form's category select: expense categories, or just 'Rendimentos' for income. */
+  function fillFormCategories(value = sel('cat').value): void {
+    const income = sel('type').value === 'i';
+    const c = sel('cat');
+    c.innerHTML = income ? `<option>${html.escape(INCOME_CATEGORY)}</option>` : html.categoryOptions(data.cats);
+    c.disabled = income;
+    if (!income && expenseCategoryNames(data.cats).includes(value)) c.value = value;
+    fillSubs('subcat', c.value);
+  }
+
   function fillSelects(): void {
-    const selects = [sel('cat'), sel('fc'), sel('rc'), sel('kwNewCat')];
+    const selects = [sel('fc'), sel('rc'), sel('kwNewCat')];
     const values = selects.map((s) => s.value);
-    selects[0]!.innerHTML = html.categoryOptions(data.cats);
-    selects[1]!.innerHTML = html.categoryOptions(data.cats, true, true);
+    selects[0]!.innerHTML = html.categoryOptions(data.cats, true, true);
+    selects[1]!.innerHTML = html.categoryOptions(data.cats);
     selects[2]!.innerHTML = html.categoryOptions(data.cats);
-    selects[3]!.innerHTML = html.categoryOptions(data.cats);
     selects.forEach((s, i) => {
       if (values[i]) s.value = values[i]!;
     });
+    fillFormCategories();
+    fillSubs('rsub', sel('rc').value);
   }
 
   function renderList(): void {
@@ -147,7 +188,8 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       }),
     );
     $('rlist').innerHTML = html.recurringListHtml(data.rec, data.cats);
-    $('catList').innerHTML = html.categoryEditorHtml(data.cats, categoryUsage());
+    const open = new Set([...doc.querySelectorAll<HTMLDetailsElement>('[data-subs]')].filter((d) => d.open).map((d) => d.dataset.subs!));
+    $('catList').innerHTML = html.categoryEditorHtml(data.cats, categoryUsage(), data.subs, open);
     renderRules();
     if (deleting && !data.cats[deleting]) closeDeletePanel();
   }
@@ -185,22 +227,31 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   function resetForm(): void {
     editId = null;
     touched = false;
+    subTouched = false;
     ['amt', 'desc', 'tags'].forEach((i) => ($(i).value = ''));
     sel('type').value = 'e';
-    $('date').value = ref;
-    sel('cat').disabled = false;
-    $('sub').textContent = 'Add';
+    setFormDate(ref);
+    fillFormCategories();
+    fillSubs('subcat', sel('cat').value, '');
+    $('sub').textContent = t('form.add');
     $('cancel').hidden = true;
-    $('fT').textContent = 'Add a transaction';
+    $('fT').textContent = t('form.addTitle');
   }
 
   async function submitTransaction(): Promise<void> {
     const amount = parseAmount($('amt').value);
-    if (!(amount > 0) || !$('date').value) return;
+    const date = formDate();
+    if (!date) {
+      $('date').setCustomValidity(t('form.badDate'));
+      $('date').reportValidity();
+      return;
+    }
+    if (!(amount > 0)) return;
     const type = sel('type').value as TxType;
     const desc = $('desc').value.trim();
     const cat = type === 'i' ? INCOME_CATEGORY : sel('cat').value;
-    const fields = { date: $('date').value, amount, desc: desc || cat, cat, type, tags: $('tags').value.trim() };
+    const sub = sel('subcat').value;
+    const fields = { date, amount, desc: desc || sub || cat, cat, sub, type, tags: $('tags').value.trim() };
     let tx: Transaction;
     if (editId !== null) {
       const existing = data.txs.find((z) => z.id === editId);
@@ -225,27 +276,74 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   function startEdit(x: Transaction): void {
     editId = x.id;
     sel('type').value = x.type;
-    $('date').value = x.date;
+    setFormDate(x.date);
     $('amt').value = amountToInput(x.amount);
     $('desc').value = x.desc;
     $('tags').value = x.tags || '';
-    sel('cat').disabled = x.type === 'i';
-    if (x.type === 'e') sel('cat').value = x.cat;
+    fillFormCategories(x.cat);
+    fillSubs('subcat', sel('cat').value, x.sub || '');
     touched = false;
-    $('sub').textContent = 'Save changes';
+    subTouched = false;
+    $('sub').textContent = t('form.save');
     $('cancel').hidden = false;
-    $('fT').textContent = 'Edit transaction';
+    $('fT').textContent = t('form.editTitle');
     $('f').scrollIntoView({ behavior: 'smooth' });
   }
 
   $('desc').addEventListener('input', () => {
-    const g = guessCategory($('desc').value, data.learn, data.rules, data.cats);
-    if (g && !touched && sel('type').value === 'e') sel('cat').value = g;
+    const text = $('desc').value;
+    if (sel('type').value === 'i') {
+      const s = guessSubcategory(text, data.subs, INCOME_CATEGORY);
+      if (s && !subTouched) sel('subcat').value = s.sub;
+      return;
+    }
+    if (touched) {
+      const s = guessSubcategory(text, data.subs, sel('cat').value);
+      if (s && !subTouched) sel('subcat').value = s.sub;
+      return;
+    }
+    // A keyword rule or learned merchant decides the category; a subcategory named in
+    // the description (e.g. "Netflix") fills in the rest, or the category when no rule matched.
+    const g = guessCategory(text, data.learn, data.rules, data.cats);
+    const s = guessSubcategory(text, data.subs, g ?? undefined);
+    const cat = g ?? s?.cat;
+    if (!cat) return;
+    if (cat !== sel('cat').value) {
+      sel('cat').value = cat;
+      fillSubs('subcat', cat, '');
+    }
+    if (s && !subTouched) sel('subcat').value = s.sub;
   });
-  sel('cat').addEventListener('change', () => (touched = true));
-  sel('type').addEventListener('change', () => (sel('cat').disabled = sel('type').value === 'i'));
+  sel('cat').addEventListener('change', () => {
+    touched = true;
+    fillSubs('subcat', sel('cat').value, '');
+  });
+  sel('subcat').addEventListener('change', () => (subTouched = true));
+  sel('type').addEventListener('change', () => {
+    subTouched = false;
+    fillFormCategories();
+  });
+  sel('rc').addEventListener('change', () => fillSubs('rsub', sel('rc').value, ''));
   $('cancel').addEventListener('click', resetForm);
   $('sub').addEventListener('click', () => void submitTransaction());
+  $('date').addEventListener('input', () => $('date').setCustomValidity(''));
+  $('date').addEventListener('blur', () => {
+    const iso = formDate();
+    if (iso) setFormDate(iso); // tidy 4/11/26 into 04/11/2026
+  });
+  $('dateBtn').addEventListener('click', () => {
+    const pick = $('datePick');
+    pick.value = formDate() ?? ref;
+    try {
+      pick.showPicker();
+    } catch {
+      pick.focus();
+    }
+  });
+  $('datePick').addEventListener('change', () => {
+    if ($('datePick').value) setFormDate($('datePick').value);
+    $('date').focus();
+  });
   ['date', 'amt', 'desc', 'tags'].forEach((i) =>
     $(i).addEventListener('keydown', (e) => {
       if (e.key === 'Enter') void submitTransaction();
@@ -303,7 +401,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
         () => repo.deleteTransaction(x.id),
         async () => {
           await render();
-          toast('Transaction deleted', true);
+          toast(t('tx.deleted'), true);
         },
       );
     }
@@ -316,7 +414,8 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       const c = JSON.parse(d.chip);
       sel('type').value = 'e';
       $('desc').value = c.desc;
-      sel('cat').value = c.cat;
+      fillFormCategories(c.cat);
+      fillSubs('subcat', sel('cat').value, c.sub || '');
       $('amt').value = amountToInput(c.amount);
       $('amt').focus();
       $('amt').select();
@@ -334,6 +433,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       desc,
       amount,
       cat: sel('rc').value,
+      ...(sel('rsub').value ? { sub: sel('rsub').value } : {}),
       day: +$('rday').value || 1,
       start: today().slice(0, 7),
     };
@@ -346,7 +446,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   $('ncb').addEventListener('click', () => {
     const name = $('nc').value.trim();
     if (!name) return;
-    if (data.cats[name] || name === INCOME_CATEGORY) return toast(`There is already a category called "${name}".`);
+    if (data.cats[name] || isIncomeCategory(name)) return toast(t('cat.exists', { name }));
     $('nc').value = '';
     const color = $('ncc').value;
     $('ncc').value = nextCategoryColor({ ...data.cats, [name]: color });
@@ -361,10 +461,8 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   function openDeletePanel(name: string): void {
     deleting = name;
     const n = categoryUsage()[name] || 0;
-    const others = Object.keys(data.cats).filter((c) => c !== name);
-    $('catDeleteText').textContent = n
-      ? `"${name}" is used by ${n} transaction${n === 1 ? '' : 's'} or recurring expense${n === 1 ? '' : 's'}. Choose where to move them, then delete.`
-      : `Delete "${name}"? Its keyword rules and budget are deleted too.`;
+    const others = expenseCategoryNames(data.cats).filter((c) => c !== name);
+    $('catDeleteText').textContent = n ? tn('catDel.used', n, { name }) : t('catDel.unused', { name });
     $('catDeleteMoveLabel').hidden = !n;
     sel('catDeleteTo').innerHTML = others.map((c) => `<option>${html.escape(c)}</option>`).join('');
     $<HTMLButtonElement>('catDeleteOk').disabled = n > 0 && !others.length;
@@ -382,30 +480,51 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       async () => {
         closeDeletePanel();
         await render();
-        toast(moveTo ? `Deleted "${name}" and moved its entries to "${moveTo}"` : `Deleted "${name}"`);
+        toast(moveTo ? t('catDel.doneMoved', { name, to: moveTo }) : t('catDel.done', { name }));
       },
     );
   });
 
   $('catList').addEventListener('change', (e) => {
-    const t = e.target as HTMLInputElement;
-    if (t.dataset.catColor) void update(() => repo.saveCategory(t.dataset.catColor!, t.value));
+    const el = e.target as HTMLInputElement;
+    if (el.dataset.catColor) void update(() => repo.saveCategory(el.dataset.catColor!, el.value));
+  });
+
+  function addSubcategory(category: string): void {
+    const input = [...doc.querySelectorAll<HTMLInputElement>('[data-sub-new]')].find((i) => i.dataset.subNew === category);
+    const name = input?.value.trim();
+    if (!name) return;
+    if (data.subs[category]?.includes(name)) return toast(t('sub.exists', { cat: category, name }));
+    void update(() => repo.addSubcategory(category, name));
+  }
+
+  $('catList').addEventListener('keydown', (e) => {
+    const el = e.target as HTMLElement;
+    if (e.key === 'Enter' && el.dataset.subNew) addSubcategory(el.dataset.subNew);
   });
 
   $('catList').addEventListener('click', (e) => {
-    const t = e.target as HTMLElement;
-    if (t.dataset.catDelete) openDeletePanel(t.dataset.catDelete);
-    if (t.dataset.catRename) {
-      const old = t.dataset.catRename;
+    const el = e.target as HTMLElement;
+    if (el.dataset.subAdd) addSubcategory(el.dataset.subAdd);
+    if (el.dataset.subDelete && el.dataset.subCat) {
+      const [category, name] = [el.dataset.subCat, el.dataset.subDelete];
+      const n =
+        data.txs.filter((x) => x.cat === category && x.sub === name).length + data.rec.filter((r) => r.cat === category && r.sub === name).length;
+      if (n && !win.confirm(tn('sub.confirmDelete', n, { name, cat: category }))) return;
+      void update(() => repo.deleteSubcategory(category, name));
+    }
+    if (el.dataset.catDelete) openDeletePanel(el.dataset.catDelete);
+    if (el.dataset.catRename) {
+      const old = el.dataset.catRename;
       const input = [...doc.querySelectorAll<HTMLInputElement>('[data-cat-name]')].find((i) => i.dataset.catName === old)!;
       const name = input.value.trim();
       if (!name || name === old) return;
-      if (data.cats[name] || name === INCOME_CATEGORY) return toast(`There is already a category called "${name}".`);
+      if (data.cats[name] || isIncomeCategory(name)) return toast(t('cat.exists', { name }));
       void update(
         () => repo.renameCategory(old, name),
         async () => {
           await render();
-          toast(`Renamed "${old}" to "${name}"`);
+          toast(t('cat.renamed', { old, name }));
         },
       );
     }
@@ -414,15 +533,15 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   $('kwAdd').addEventListener('click', () => {
     const keyword = $('kwNew').value.toLowerCase();
     if (!keyword.trim()) return;
-    if (data.rules.some((r) => r.keyword === keyword)) return toast(`There is already a rule for "${keyword}".`);
+    if (data.rules.some((r) => r.keyword === keyword)) return toast(t('rules.exists', { keyword }));
     $('kwNew').value = '';
     void update(() => repo.saveKeywordRule({ keyword, category: sel('kwNewCat').value }));
   });
   $('kwFilter').addEventListener('input', renderRules);
   $('kwList').addEventListener('change', (e) => {
-    const t = e.target as HTMLSelectElement;
-    const rule = data.rules.find((r) => String(r.id) === t.dataset.ruleCat);
-    if (rule) void update(() => repo.saveKeywordRule({ ...rule, category: t.value }));
+    const el = e.target as HTMLSelectElement;
+    const rule = data.rules.find((r) => String(r.id) === el.dataset.ruleCat);
+    if (rule) void update(() => repo.saveKeywordRule({ ...rule, category: el.value }));
   });
   $('kwList').addEventListener('click', (e) => {
     const id = (e.target as HTMLElement).dataset.ruleDelete;
@@ -437,7 +556,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   }
 
   const exporting = (run: () => Promise<void>) => () =>
-    run().catch((e) => toast(`Couldn't export: ${(e as Error)?.message ?? e}`));
+    run().catch((e) => toast(t('export.failed', { message: translateError(String((e as Error)?.message ?? e)) })));
   $('xj').addEventListener(
     'click',
     exporting(async () => download('expenses-backup.json', JSON.stringify(await repo.exportSnapshot()), 'application/json')),
@@ -451,18 +570,18 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     if (!f) return null;
     const backup = parseBackup(await f.text());
     input.value = '';
-    if (!backup) win.alert('This file is not a valid backup.');
+    if (!backup) win.alert(t('backup.invalid'));
     return backup;
   }
 
   $('imp').addEventListener('change', async (e) => {
     const backup = await pickedBackup(e);
-    if (!backup || !win.confirm('Replace current data with this backup?')) return;
+    if (!backup || !win.confirm(t('backup.confirmReplace'))) return;
     await update(
       () => repo.importSnapshot(backup, { replace: true }),
       async () => {
         await render();
-        toast('Backup imported');
+        toast(t('backup.imported'));
       },
     );
   });
@@ -482,7 +601,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
 
   // ---- start ----
 
-  $('date').value = ref;
+  setFormDate(ref);
   await load();
   // Categories used by old data but missing from the list get a colour.
   for (const [name, color] of Object.entries(missingCategories(data.txs, data.cats))) await repo.saveCategory(name, color);
@@ -491,4 +610,4 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
 }
 
 export const importMessage = ({ transactions, skipped }: { transactions: number; skipped: number }): string =>
-  `Imported ${transactions} transaction${transactions === 1 ? '' : 's'}` + (skipped ? ` (${skipped} already there, skipped)` : '');
+  tn('import.done', transactions) + (skipped ? t('import.skipped', { n: skipped }) : '');

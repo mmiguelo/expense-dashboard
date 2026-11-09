@@ -9,7 +9,7 @@ Built with [Vite](https://vite.dev) and TypeScript, with no UI framework. Tests 
 ## Accounts and roles
 
 - **Anyone can create an account** with email and password. The email must be confirmed before the account can sign in or reach any data.
-- **Every new account is a `member`.** It starts with a copy of the default categories and keyword rules, then they are its own to change.
+- **Every new account is a `member`.** It starts with a copy of the default categories, subcategories and keyword rules, then they are its own to change.
 - **Admins** get an **Admin** screen with two tabs. **Users** lists accounts (email, name, role, status, created date) and lets admins change roles and deactivate or reactivate accounts. **Defaults** sets the categories, colours and keyword rules that new accounts start with. Admins see account details only. They cannot read anyone's transactions, categories, rules, budgets or recurring expenses: the database doesn't allow it.
 - **Deactivating** an account blocks it immediately, even if it is signed in, and deletes nothing. Reactivating restores everything. Nobody can change their own role or deactivate themselves, and the last active admin can't be demoted, deactivated or deleted.
 
@@ -51,11 +51,12 @@ Everything is enforced in Postgres, so it holds for any client, not just this ap
 
 ## Using it
 
-- **Dashboard:** add expenses and income. The description suggests a category from your keyword rules. You also get charts, budgets, comparisons with the previous period and projections.
+- **Dashboard:** add expenses and income, each with a category and optionally a subcategory. The description suggests a category from your keyword rules, and a subcategory when it names one ("Netflix" → Subscrições › Netflix). Income always goes in **Rendimentos** (Salário, Vendas, ...). You also get charts, budgets per category, comparisons with the previous period and projections.
 - **Settings:**
-  - Categories: add, rename, recolor, or delete, choosing where to move what still uses the category. Renaming or deleting updates transactions, recurring expenses, rules and budgets in one transaction.
+  - Categories: add, rename, recolor, or delete, choosing where to move what still uses the category. Renaming or deleting updates transactions, recurring expenses, rules and budgets in one transaction. Open a category to add or delete its subcategories; deleting one leaves its transactions in the category without a subcategory. **Rendimentos** is reserved for income and can't be renamed or deleted.
   - Keyword rules, monthly budgets, recurring expenses, and backups (JSON/CSV export, JSON import).
 - **Account menu** (top right): your email and role, and **Log out**.
+- **Language:** the interface is in Portuguese. All texts live in `src/i18n/` (`pt.ts` is the reference, `en.ts` has the same keys); a language picker can switch between them with `setLang` and remember the choice with `saveLanguage`.
 - **Old browser data:** data saved in a browser before accounts existed (`exp-v2` / `expenses-v1`) can be imported once with **Import my existing local data**. Importing again skips anything already there.
 
 ## Development

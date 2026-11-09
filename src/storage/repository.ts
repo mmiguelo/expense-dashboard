@@ -8,6 +8,7 @@ import type {
   RecurringExpense,
   RecurringOccurrence,
   Snapshot,
+  Subcategories,
   Transaction,
 } from '../types';
 
@@ -58,6 +59,12 @@ export interface Repository {
    * Fails if it is in use and `reassignTo` is null. Its budget is deleted.
    */
   deleteCategory(name: string, reassignTo: string | null): Promise<void>;
+
+  /** Per category, in display order. */
+  getSubcategories(): Promise<Subcategories>;
+  addSubcategory(category: string, name: string): Promise<void>;
+  /** Delete; transactions and recurring expenses that used it keep only the category. */
+  deleteSubcategory(category: string, name: string): Promise<void>;
 
   /** In matching order. */
   listKeywordRules(): Promise<KeywordRule[]>;

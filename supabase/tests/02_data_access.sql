@@ -1,6 +1,6 @@
 begin;
 \ir _helpers.psql
-select plan(43);
+select plan(45);
 
 select pg_temp.new_user('admin@test.local') as admin \gset
 select pg_temp.new_user('alice@test.local') as alice \gset
@@ -9,13 +9,14 @@ select pg_temp.new_user('dave@test.local') as dave \gset
 select pg_temp.new_user('carol@test.local', confirmed => false) as carol \gset
 update public.profiles set role = 'admin' where id = :'admin';
 -- Rows each user gets from the defaults, plus the 5 that pg_temp.fill adds.
-select (select count(*) from public.default_categories) + (select count(*) from public.default_keyword_rules) + 5 as full_rows \gset
+select (select count(*) from public.default_categories) + (select count(*) from public.default_subcategories)
+  + (select count(*) from public.default_keyword_rules) + 5 as full_rows \gset
 
 -- Every per-user data table, and a way to count what the current caller can see in each.
 create function pg_temp.visible_rows(owner uuid) returns int language plpgsql as $$
 declare t text; n int; total int := 0;
 begin
-  foreach t in array array['transactions','categories','keyword_rules','budgets','recurring_expenses','recurring_occurrences','category_corrections'] loop
+  foreach t in array array['transactions','categories','subcategories','keyword_rules','budgets','recurring_expenses','recurring_occurrences','category_corrections'] loop
     execute format('select count(*) from public.%I where user_id = $1', t) into n using owner;
     total := total + n;
   end loop;
@@ -27,8 +28,12 @@ select results_eq(format('select count(*)::int from public.categories where user
   'select count(*)::int from public.default_categories', 'a new account gets the default categories');
 select results_eq(format('select count(*)::int from public.keyword_rules where user_id = %L', :'alice'),
   'select count(*)::int from public.default_keyword_rules', 'a new account gets the default keyword rules');
+select results_eq(format('select count(*)::int from public.subcategories where user_id = %L', :'alice'),
+  'select count(*)::int from public.default_subcategories', 'a new account gets the default subcategories');
+select results_eq(format($$select name from public.subcategories where user_id = %L and category = 'Rendimentos' order by id$$, :'alice'),
+  $$values ('Mais-Valias'::text), ('Salário'), ('Subsídios'), ('Taxas & Impostos'), ('Vendas')$$, 'subcategories are copied in order');
 select results_eq(format($$select category from public.keyword_rules where user_id = %L and keyword = 'pingo doce'$$, :'alice'),
-  $$values ('Groceries'::text)$$, 'keyword rules are copied with their category');
+  $$values ('Alimentação'::text)$$, 'keyword rules are copied with their category');
 
 -- Give Alice and Dave one row in every table, acting as themselves.
 create function pg_temp.fill(uid uuid) returns void language plpgsql as $$
@@ -36,11 +41,11 @@ declare rid uuid := gen_random_uuid();
 begin
   perform pg_temp.act_as(uid);
   set local role authenticated;
-  insert into public.transactions (date, amount, type, category, description) values ('2026-03-01', 10, 'expense', 'Groceries', 'mine');
-  insert into public.budgets (category, amount) values ('Groceries', 100);
-  insert into public.recurring_expenses (id, description, amount, category, day, start_month) values (rid, 'Rent', 500, 'Mortgage', 1, '2026-01-01');
+  insert into public.transactions (date, amount, type, category, description) values ('2026-03-01', 10, 'expense', 'Alimentação', 'mine');
+  insert into public.budgets (category, amount) values ('Alimentação', 100);
+  insert into public.recurring_expenses (id, description, amount, category, day, start_month) values (rid, 'Rent', 500, 'Crédito', 1, '2026-01-01');
   insert into public.recurring_occurrences (recurring_id, month) values (rid, '2026-01-01');
-  insert into public.category_corrections (merchant, category) values ('lidl', 'Groceries');
+  insert into public.category_corrections (merchant, category) values ('lidl', 'Alimentação');
   reset role;
 end $$;
 select pg_temp.fill(:'alice');

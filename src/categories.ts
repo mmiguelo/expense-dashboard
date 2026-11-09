@@ -1,17 +1,24 @@
-import type { Categories, KeywordRule, LearnedCategories, Transaction } from './types';
+import type { Categories, KeywordRule, LearnedCategories, Subcategories, Transaction } from './types';
 
 // The categories and keyword rules themselves are data: each account has its own, copied
 // from the defaults an admin manages (tables default_categories and default_keyword_rules).
 
-export const INCOME_CATEGORY = 'Income';
-const INCOME_COLOR = '#3fa66b';
-const FALLBACK_COLOR = '#9aa5b5';
+/** The category of every income transaction. Old data used 'Income'. */
+export const INCOME_CATEGORY = 'Rendimentos';
+const LEGACY_INCOME_CATEGORY = 'Income';
+const INCOME_COLOR = '#5e8c61';
+const FALLBACK_COLOR = '#a39b8b';
+
+export const isIncomeCategory = (cat: string): boolean => cat === INCOME_CATEGORY || cat === LEGACY_INCOME_CATEGORY;
+
+/** Category names an expense can use, in display order. */
+export const expenseCategoryNames = (cats: Categories): string[] => Object.keys(cats).filter((c) => !isIncomeCategory(c));
 
 /** Colours suggested, in rotation, for new categories. */
-const CUSTOM_PALETTE = ['#0a8f8f', '#c05299', '#7d8f1f', '#a0522d', '#4b6cb7', '#cc7722'];
+const CUSTOM_PALETTE = ['#8b6b56', '#7a2e3c', '#6f7442', '#b5643c', '#4f6d7a', '#c2a14d'];
 
 export const categoryColor = (cat: string, cats: Categories): string =>
-  cat === INCOME_CATEGORY ? INCOME_COLOR : cats[cat] || FALLBACK_COLOR;
+  cats[cat] || (isIncomeCategory(cat) ? INCOME_COLOR : FALLBACK_COLOR);
 
 /** Suggested colour for the next category added to `cats`. */
 export const nextCategoryColor = (cats: Categories): string =>
@@ -31,6 +38,24 @@ export function guessCategory(text: string, learned: LearnedCategories, rules: K
   const s = ' ' + l + ' ';
   for (const r of rules) if (r.keyword && s.includes(r.keyword) && cats[r.category]) return r.category;
   return null;
+}
+
+/**
+ * Suggest a subcategory from a description that names one, e.g. "Netflix março" ->
+ * Subscrições / Netflix. Within `category` when given, otherwise in any category.
+ * Names shorter than 3 letters are ignored, and the longest match wins.
+ */
+export function guessSubcategory(text: string, subs: Subcategories, category?: string): { cat: string; sub: string } | null {
+  const s = ' ' + text.toLowerCase().trim() + ' ';
+  let best: { cat: string; sub: string } | null = null;
+  for (const [cat, names] of Object.entries(subs)) {
+    if (category !== undefined ? cat !== category : isIncomeCategory(cat)) continue;
+    for (const sub of names) {
+      const n = sub.toLowerCase();
+      if (n.length >= 3 && s.includes(n) && (!best || n.length > best.sub.length)) best = { cat, sub };
+    }
+  }
+  return best;
 }
 
 /**

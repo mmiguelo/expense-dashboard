@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseBackup, toCsv } from '../src/backup';
-import { guessCategory, missingCategories, nextCategoryColor } from '../src/categories';
-import { inPeriod, shiftRef } from '../src/dates';
+import { guessCategory, guessSubcategory, missingCategories, nextCategoryColor } from '../src/categories';
+import { formatDmy, inPeriod, parseDmy, shiftRef } from '../src/dates';
 import { parseAmount } from '../src/format';
 
 describe('shiftRef', () => {
@@ -72,17 +72,43 @@ describe('guessCategory', () => {
   });
 });
 
+describe('guessSubcategory', () => {
+  const subs = {
+    Subscrições: ['Netflix', 'Apple One', 'Apple Music', 'HBO'],
+    Habitação: ['Água', 'Gás'],
+    Rendimentos: ['Salário'],
+  };
+
+  it('finds a subcategory named in the description, in any expense category', () => {
+    expect(guessSubcategory('NETFLIX.COM março', subs)).toEqual({ cat: 'Subscrições', sub: 'Netflix' });
+    expect(guessSubcategory('Fatura água', subs)).toEqual({ cat: 'Habitação', sub: 'Água' });
+    expect(guessSubcategory('Pingo Doce', subs)).toBeNull();
+  });
+
+  it('prefers the longest match and skips names under 3 letters', () => {
+    expect(guessSubcategory('apple music family', subs)).toEqual({ cat: 'Subscrições', sub: 'Apple Music' });
+    expect(guessSubcategory('Gás natural', { X: ['Gás', 'G'] })).toEqual({ cat: 'X', sub: 'Gás' });
+    expect(guessSubcategory('g', { X: ['G'] })).toBeNull();
+  });
+
+  it('looks only in the given category, and leaves income out otherwise', () => {
+    expect(guessSubcategory('Netflix', subs, 'Habitação')).toBeNull();
+    expect(guessSubcategory('Salário outubro', subs)).toBeNull();
+    expect(guessSubcategory('Salário outubro', subs, 'Rendimentos')).toEqual({ cat: 'Rendimentos', sub: 'Salário' });
+  });
+});
+
 describe('missingCategories', () => {
   it('adds categories used by expenses, with rotating palette colours', () => {
     const tx = (cat: string, type: 'e' | 'i' = 'e') => ({ id: '1', date: '2026-01-01', amount: 1, desc: cat, cat, type });
     const cats = { A: '#000' };
     expect(missingCategories([tx('A'), tx('Pets'), tx('Pets'), tx('Kids'), tx('Income', 'i')], cats)).toEqual({
-      Pets: '#c05299',
-      Kids: '#7d8f1f',
+      Pets: '#7a2e3c',
+      Kids: '#6f7442',
     });
     // The suggestion rotates with the number of categories.
-    expect(nextCategoryColor({})).toBe('#0a8f8f');
-    expect(nextCategoryColor({ a: '', b: '', c: '', d: '', e: '', f: '', g: '' })).toBe('#c05299');
+    expect(nextCategoryColor({})).toBe('#8b6b56');
+    expect(nextCategoryColor({ a: '', b: '', c: '', d: '', e: '', f: '', g: '' })).toBe('#7a2e3c');
   });
 });
 
@@ -91,9 +117,11 @@ describe('backup', () => {
     expect(
       toCsv([
         { id: '1', date: '2026-01-02', amount: 3.5, desc: 'Say "hi"', cat: 'Other', type: 'e', tags: 'a, b', fixed: 1 },
-        { id: '2', date: '2026-01-03', amount: 100, desc: 'Salary', cat: 'Income', type: 'i' },
+        { id: '2', date: '2026-01-03', amount: 100, desc: 'Salary', cat: 'Rendimentos', sub: 'Salário', type: 'i' },
       ]),
-    ).toBe('date,type,amount,category,description,tags,fixed\n2026-01-02,expense,3.5,Other,"Say ""hi""","a, b",1\n2026-01-03,income,100,Income,"Salary","",0');
+    ).toBe(
+      'date,type,amount,category,subcategory,description,tags,fixed\n2026-01-02,expense,3.5,Other,"","Say ""hi""","a, b",1\n2026-01-03,income,100,Rendimentos,"Salário","Salary","",0',
+    );
   });
 
   it('accepts only JSON with a transactions array', () => {
@@ -101,5 +129,22 @@ describe('backup', () => {
     expect(parseBackup('{"rec":[]}')).toBeNull();
     expect(parseBackup('null')).toBeNull();
     expect(parseBackup('not json')).toBeNull();
+  });
+});
+
+describe('dd/mm/yyyy dates', () => {
+  it('reads what people type', () => {
+    expect(parseDmy('04/11/2026')).toBe('2026-11-04');
+    expect(parseDmy('4/11/2026')).toBe('2026-11-04');
+    expect(parseDmy(' 4-11-26 ')).toBe('2026-11-04');
+    expect(parseDmy('4.11.2026')).toBe('2026-11-04');
+    expect(parseDmy('04112026')).toBe('2026-11-04');
+    expect(parseDmy('29/02/2028')).toBe('2028-02-29');
+  });
+  it('rejects dates that do not exist or are not day/month/year', () => {
+    for (const bad of ['', '2026-11-04', '31/04/2026', '29/02/2027', '13/13/2026', '00/01/2026', 'ontem']) expect(parseDmy(bad)).toBeNull();
+  });
+  it('round-trips with formatDmy', () => {
+    expect(parseDmy(formatDmy('2026-01-31'))).toBe('2026-01-31');
   });
 });

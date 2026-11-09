@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { t } from '../i18n';
 
 type AuthMode = 'signin' | 'signup' | 'reset';
 
-const COPY: Record<AuthMode, { intro: string; submit: string; switchTo: string; password: boolean }> = {
-  signin: { intro: 'Sign in to see your expenses on any device.', submit: 'Sign in', switchTo: 'Create an account', password: true },
-  signup: { intro: 'Create an account. Use at least 8 characters for the password.', submit: 'Create account', switchTo: 'I already have an account', password: true },
-  reset: { intro: "Enter your email and we'll send you a link to choose a new password.", submit: 'Send reset link', switchTo: 'Back to sign in', password: false },
+const COPY: Record<AuthMode, { intro: () => string; submit: () => string; switchTo: () => string; password: boolean }> = {
+  signin: { intro: () => t('auth.signin.intro'), submit: () => t('auth.signin.submit'), switchTo: () => t('auth.signin.switch'), password: true },
+  signup: { intro: () => t('auth.signup.intro'), submit: () => t('auth.signup.submit'), switchTo: () => t('auth.signup.switch'), password: true },
+  reset: { intro: () => t('auth.reset.intro'), submit: () => t('auth.reset.submit'), switchTo: () => t('auth.reset.switch'), password: false },
 };
 
 /**
@@ -75,8 +76,8 @@ export function setupAuthScreen(doc: Document, supabase: SupabaseClient): void {
   let mode: AuthMode = 'signin';
   let busy = false;
   const cooldowns = new Cooldowns(doc.defaultView!);
-  cooldowns.bind(submit, () => mode, () => COPY[mode].submit);
-  cooldowns.bind(resend, () => 'resend', () => 'Resend confirmation email');
+  cooldowns.bind(submit, () => mode, () => COPY[mode].submit());
+  cooldowns.bind(resend, () => 'resend', () => t('auth.resend'));
 
   const message = (text: string, kind: 'err' | 'ok' | '' = '') => {
     $('authMsg').textContent = text;
@@ -87,9 +88,9 @@ export function setupAuthScreen(doc: Document, supabase: SupabaseClient): void {
   const setMode = (m: AuthMode) => {
     mode = m;
     const c = COPY[m];
-    $('authIntro').textContent = c.intro;
+    $('authIntro').textContent = c.intro();
     cooldowns.paint();
-    $('authSwitch').textContent = c.switchTo;
+    $('authSwitch').textContent = c.switchTo();
     $('authPassLabel').hidden = !c.password;
     $('authPass').autocomplete = m === 'signup' ? 'new-password' : 'current-password';
     $('authForgot').hidden = m !== 'signin';
@@ -105,8 +106,8 @@ export function setupAuthScreen(doc: Document, supabase: SupabaseClient): void {
     if (busy || cooldowns.active(mode)) return;
     const email = $('authEmail').value.trim();
     const password = $('authPass').value;
-    if (!email.includes('@')) return message('Enter your email address.', 'err');
-    if (COPY[mode].password && password.length < 8) return message('The password needs at least 8 characters.', 'err');
+    if (!email.includes('@')) return message(t('auth.enterEmail'), 'err');
+    if (COPY[mode].password && password.length < 8) return message(t('auth.passwordShort'), 'err');
 
     const attempt = mode;
     busy = true;
@@ -124,13 +125,13 @@ export function setupAuthScreen(doc: Document, supabase: SupabaseClient): void {
         if (error) throw error;
         // Email confirmation is required, so there is no session until the link is opened.
         if (!data.session) {
-          message(`Almost done: open the link we sent to ${email} to confirm your account, then sign in.`, 'ok');
+          message(t('auth.confirmSent', { email }), 'ok');
           offerResend(true);
         }
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: pageUrl(doc) });
         if (error) throw error;
-        message(`If ${email} has an account, a reset link is on its way.`, 'ok');
+        message(t('auth.resetSent', { email }), 'ok');
       }
     } catch (err) {
       if (isRateLimited(err)) wait = COOLDOWNS.rateLimited;
@@ -146,13 +147,13 @@ export function setupAuthScreen(doc: Document, supabase: SupabaseClient): void {
   resend.addEventListener('click', async () => {
     if (cooldowns.active('resend')) return;
     const email = $('authEmail').value.trim();
-    if (!email.includes('@')) return message('Enter your email address.', 'err');
+    if (!email.includes('@')) return message(t('auth.enterEmail'), 'err');
     resend.disabled = true;
     let wait: number = COOLDOWNS.resend;
     try {
       const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: pageUrl(doc) } });
       if (error) throw error;
-      message(`We sent a new confirmation link to ${email}. It can take a minute; check your spam folder too.`, 'ok');
+      message(t('auth.resent', { email }), 'ok');
     } catch (err) {
       if (isRateLimited(err)) wait = COOLDOWNS.rateLimited;
       message(friendly(err), 'err');
@@ -172,7 +173,7 @@ export function setupRecoveryScreen(doc: Document, supabase: SupabaseClient, onD
     const password = $('newPass').value;
     const msg = $('recoveryMsg');
     if (password.length < 8) {
-      msg.textContent = 'The password needs at least 8 characters.';
+      msg.textContent = t('auth.passwordShort');
       msg.className = 'authmsg err';
       return;
     }
@@ -191,12 +192,12 @@ export function friendly(err: unknown): string {
   const e = err as { message?: string; code?: string };
   const m = `${e?.code ?? ''} ${e?.message ?? String(err)}`;
   if (/over_email_send_rate_limit|email rate limit/i.test(m))
-    return 'Too many emails have been sent recently. Please wait a few minutes before asking for another one.';
-  if (isRateLimited(err)) return 'Too many attempts from this network. Please wait a few minutes and try again.';
-  if (/invalid login credentials|invalid_credentials/i.test(m)) return 'Wrong email or password.';
-  if (/email not confirmed|email_not_confirmed/i.test(m)) return 'Confirm your email first: open the link we sent you, or send it again below.';
-  if (/already registered|user_already_exists/i.test(m)) return 'There is already an account with this email. Sign in instead.';
-  if (/weak_password|password should/i.test(m)) return 'Choose a stronger password: at least 8 characters.';
-  if (/failed to fetch|network/i.test(m)) return "Can't reach the server. Check your connection.";
+    return t('auth.err.emailRate');
+  if (isRateLimited(err)) return t('auth.err.rate');
+  if (/invalid login credentials|invalid_credentials/i.test(m)) return t('auth.err.credentials');
+  if (/email not confirmed|email_not_confirmed/i.test(m)) return t('auth.err.notConfirmed');
+  if (/already registered|user_already_exists/i.test(m)) return t('auth.err.exists');
+  if (/weak_password|password should/i.test(m)) return t('auth.err.weak');
+  if (/failed to fetch|network/i.test(m)) return t('auth.err.network');
   return e?.message ?? String(err);
 }
