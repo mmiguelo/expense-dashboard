@@ -110,5 +110,16 @@ export function setupLanding(doc: Document, setMode: (mode: Mode) => void): { sh
     if (e.key === 'Escape' && !panel.hidden) close();
   });
 
-  return { showSignedOut: () => ($('signedOutNote').hidden = false) };
+  return {
+    showSignedOut: () => {
+      const note = $('signedOutNote');
+      note.hidden = false;
+      // Fade out after a few seconds; it doesn't take up any room meanwhile.
+      const win = doc.defaultView!;
+      win.setTimeout(() => {
+        note.classList.add('fade');
+        win.setTimeout(() => (note.hidden = true), 700);
+      }, 5000);
+    },
+  };
 }
