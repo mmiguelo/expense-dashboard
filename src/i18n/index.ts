@@ -69,6 +69,8 @@ export function translateError(message: string): string {
   if (/account is not active/.test(message)) return t('db.notActive');
   if (/too large to import/.test(message)) return t('db.tooLarge');
   if (/at least one active admin/.test(message)) return t('admin.err.lastAdmin');
+  if (/owner account cannot/.test(message)) return t('admin.err.owner');
+  if (/only the owner can/.test(message)) return t('admin.err.ownerOnly');
   if (/own role/.test(message)) return t('admin.err.ownRole');
   if (/deactivate your own/.test(message)) return t('admin.err.ownDeactivate');
   if (/duplicate key/.test(message)) return t('db.duplicate');

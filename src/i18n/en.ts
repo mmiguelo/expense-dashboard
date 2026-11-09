@@ -232,6 +232,9 @@ export const en: Record<MessageKey, string> = {
   'admin.loadFailed': "Couldn't load the admin data: {message}",
   'admin.lockTitle': "You can't change your own role or status",
   'admin.you': 'you',
+  'admin.owner': 'owner',
+  'admin.ownerLockTitle': "The owner's account is protected",
+  'admin.adminLockTitle': 'Only the owner can demote or deactivate admins',
   'admin.active': 'active',
   'admin.deactivated': 'deactivated',
   'admin.displayNameFor': 'Display name for {email}',
@@ -259,6 +262,8 @@ export const en: Record<MessageKey, string> = {
   'admin.err.lastAdmin': 'There must always be at least one active admin.',
   'admin.err.ownRole': "You can't change your own role.",
   'admin.err.ownDeactivate': "You can't deactivate your own account.",
+  'admin.err.owner': "The owner's account can't be demoted, deactivated or deleted.",
+  'admin.err.ownerOnly': 'Only the owner can demote or deactivate admins.',
   'admin.err.notAllowed': 'Not allowed to change this account.',
 
   months: 'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec',

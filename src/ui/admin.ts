@@ -43,15 +43,19 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
     $('userRows').innerHTML = profiles
       .map((p) => {
         const self = p.id === me.id;
-        const lock = self ? ` disabled title="${esc(t('admin.lockTitle'))}"` : '';
+        // Only the owner may demote or deactivate an admin; nobody may touch the owner.
+        const why = self ? 'admin.lockTitle' : p.owner ? 'admin.ownerLockTitle' : p.role === 'admin' && !me.owner ? 'admin.adminLockTitle' : '';
+        const lockRole = why ? ` disabled title="${esc(t(why))}"` : '';
+        // A non-owner admin may still reactivate a deactivated admin.
+        const lockToggle = why && !(why === 'admin.adminLockTitle' && !p.active) ? lockRole : '';
         const roles = ROLES.map((r) => `<option value="${r}"${r === p.role ? ' selected' : ''}>${t(`role.${r}`)}</option>`).join('');
         return `<tr data-user="${p.id}">
-<td>${esc(p.email)}${self ? ` <span class="badge">${t('admin.you')}</span>` : ''}</td>
+<td>${esc(p.email)}${self ? ` <span class="badge">${t('admin.you')}</span>` : ''}${p.owner ? ` <span class="badge">${t('admin.owner')}</span>` : ''}</td>
 <td><input value="${esc(p.displayName)}" data-user-name="${p.id}" maxlength="100" aria-label="${esc(t('admin.displayNameFor', { email: p.email }))}"></td>
-<td><select data-user-role="${p.id}" aria-label="${esc(t('admin.roleFor', { email: p.email }))}"${lock}>${roles}</select></td>
+<td><select data-user-role="${p.id}" aria-label="${esc(t('admin.roleFor', { email: p.email }))}"${lockRole}>${roles}</select></td>
 <td>${p.active ? `<span class="badge">${t('admin.active')}</span>` : `<span class="badge off">${t('admin.deactivated')}</span>`}</td>
 <td>${date(p.createdAt)}</td>
-<td><button type="button" data-user-toggle="${p.id}"${lock}>${t(p.active ? 'admin.deactivate' : 'admin.reactivate')}</button></td></tr>`;
+<td><button type="button" data-user-toggle="${p.id}"${lockToggle}>${t(p.active ? 'admin.deactivate' : 'admin.reactivate')}</button></td></tr>`;
       })
       .join('');
   }

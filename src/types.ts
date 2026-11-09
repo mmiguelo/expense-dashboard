@@ -79,6 +79,8 @@ export interface Profile {
   displayName: string;
   role: Role;
   active: boolean;
+  /** The protected admin: nobody can demote, deactivate or delete it. */
+  owner: boolean;
   createdAt: string;
 }
 

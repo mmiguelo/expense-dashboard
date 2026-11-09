@@ -5,10 +5,11 @@ select plan(22);
 select pg_temp.new_user('admin@test.local') as admin \gset
 select pg_temp.new_user('alice@test.local') as alice \gset
 select pg_temp.new_user('bob@test.local') as bob \gset
--- The first admin is made by hand, as in the README (no uid: SQL Editor).
-update public.profiles set role = 'admin' where id = :'admin';
--- Make it the only admin, whatever else is in the database (undone by the rollback).
-update public.profiles set role = 'member' where role = 'admin' and id <> :'admin';
+-- Make it the only admin and the owner, whatever else is in the database (undone by
+-- the rollback). Done by hand, as in the README (no uid: SQL Editor).
+update public.profiles set owner = false where owner;
+update public.profiles set role = 'member' where role = 'admin';
+update public.profiles set role = 'admin', owner = true where id = :'admin';
 
 select results_eq(
   format($$select role, active, display_name from public.profiles where id = %L$$, :'alice'),
@@ -41,7 +42,7 @@ select lives_ok(format($$update public.profiles set active = true where id = %L$
 select throws_ok(format($$update public.profiles set role = 'member' where id = %L$$, :'admin'), '42501', null, 'an admin cannot change their own role');
 select throws_ok(format($$update public.profiles set active = false where id = %L$$, :'admin'), '42501', null, 'an admin cannot deactivate themselves');
 -- Two admins now: demoting the other one is allowed.
-select lives_ok(format($$update public.profiles set role = 'member' where id = %L$$, :'bob'), 'an admin can demote another admin while one remains');
+select lives_ok(format($$update public.profiles set role = 'member' where id = %L$$, :'bob'), 'the owner can demote another admin');
 reset role;
 
 -- ---- the last active admin, even from the SQL Editor ----

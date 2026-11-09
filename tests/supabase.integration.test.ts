@@ -270,8 +270,10 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
     it('can change roles and names, but not their own role or activation', async () => {
       const repo = new SupabaseAdminRepository(admin.db);
       await repo.updateProfile(member.id, { displayName: 'Cousin', role: 'admin' });
-      await repo.updateProfile(member.id, { role: 'member' });
-      expect((await repo.listProfiles()).find((p) => p.id === member.id)).toMatchObject({ displayName: 'Cousin', role: 'member' });
+      expect((await repo.listProfiles()).find((p) => p.id === member.id)).toMatchObject({ displayName: 'Cousin', role: 'admin' });
+      // Only the owner can demote an admin.
+      await expect(repo.updateProfile(member.id, { role: 'member' })).rejects.toThrow(/only the owner/);
+      await sql(`update public.profiles set role = 'member' where id = $1`, [member.id]);
       await expect(repo.updateProfile(admin.id, { role: 'member' })).rejects.toThrow(/own role/);
       await expect(repo.updateProfile(admin.id, { active: false })).rejects.toThrow(/deactivate your own/);
     });

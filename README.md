@@ -11,17 +11,19 @@ Built with [Vite](https://vite.dev) and TypeScript, with no UI framework. Tests 
 - **Anyone can create an account** with email and password. The email must be confirmed before the account can sign in or reach any data.
 - **Every new account is a `member`.** It starts with a copy of the default categories, subcategories and keyword rules, then they are its own to change.
 - **Admins** get an **Admin** screen with two tabs. **Users** lists accounts (email, name, role, status, created date) and lets admins change roles and deactivate or reactivate accounts. **Defaults** sets the categories, colours and keyword rules that new accounts start with. Admins see account details only. They cannot read anyone's transactions, categories, rules, budgets or recurring expenses: the database doesn't allow it.
+- **The owner** is one protected admin. Nobody can demote, deactivate or delete the owner, and **only the owner can demote or deactivate other admins**. Other admins can promote members to admin and deactivate or reactivate members. The owner is marked by hand in the SQL Editor (see below) and can't be changed through the app.
 - **Deactivating** an account blocks it immediately, even if it is signed in, and deletes nothing. Reactivating restores everything. Nobody can change their own role or deactivate themselves, and the last active admin can't be demoted, deactivated or deleted.
 
 ### Making the first admin
 
-New accounts are always members, so make yourself admin once, by hand:
+New accounts are always members, so make yourself admin and owner once, by hand:
 
 1. Create your account on the site and confirm your email.
 2. In the Supabase dashboard, open **SQL Editor**, run this with your email, and check it reports 1 row:
    ```sql
-   update public.profiles set role = 'admin' where email = 'you@example.com';
+   update public.profiles set role = 'admin', owner = true where email = 'you@example.com';
    ```
+   This also makes you the owner. To hand ownership to another admin later, run `update public.profiles set owner = false where owner;` and then set `owner = true` on theirs.
 3. Reload the site. The account menu now says **Admin**, and the **Admin** tab appears.
 
 After that, make other admins from the Admin screen.

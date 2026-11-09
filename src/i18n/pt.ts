@@ -240,6 +240,9 @@ export const pt = {
   'admin.loadFailed': 'Não foi possível carregar os dados de administração: {message}',
   'admin.lockTitle': 'Não pode alterar o seu próprio perfil nem estado',
   'admin.you': 'você',
+  'admin.owner': 'proprietário',
+  'admin.ownerLockTitle': 'A conta do proprietário está protegida',
+  'admin.adminLockTitle': 'Só o proprietário pode despromover ou desativar administradores',
   'admin.active': 'ativa',
   'admin.deactivated': 'desativada',
   'admin.displayNameFor': 'Nome a mostrar de {email}',
@@ -267,6 +270,8 @@ export const pt = {
   'admin.err.lastAdmin': 'Tem de existir sempre pelo menos um administrador ativo.',
   'admin.err.ownRole': 'Não pode alterar o seu próprio perfil.',
   'admin.err.ownDeactivate': 'Não pode desativar a sua própria conta.',
+  'admin.err.owner': 'A conta do proprietário não pode ser despromovida, desativada nem apagada.',
+  'admin.err.ownerOnly': 'Só o proprietário pode despromover ou desativar administradores.',
   'admin.err.notAllowed': 'Não tem permissão para alterar esta conta.',
 
   // ---- dates ----

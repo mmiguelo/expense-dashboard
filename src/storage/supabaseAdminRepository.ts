@@ -18,7 +18,7 @@ export class SupabaseAdminRepository implements AdminRepository {
   async listProfiles(): Promise<Profile[]> {
     const { data, error } = await this.db
       .from('profiles')
-      .select('id, email, display_name, role, active, created_at')
+      .select('id, email, display_name, role, active, owner, created_at')
       .order('created_at');
     if (error) throw toError(error);
     return (data as ProfileRow[]).map(profileFromRow);

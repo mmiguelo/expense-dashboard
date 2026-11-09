@@ -78,6 +78,7 @@ export interface ProfileRow {
   display_name: string;
   role: 'admin' | 'member';
   active: boolean;
+  owner: boolean;
   created_at: string;
 }
 
@@ -87,6 +88,7 @@ export const profileFromRow = (r: ProfileRow): Profile => ({
   displayName: r.display_name,
   role: r.role,
   active: r.active,
+  owner: r.owner ?? false,
   createdAt: r.created_at,
 });
 
@@ -201,7 +203,7 @@ export class SupabaseRepository implements Repository {
   async getProfile(): Promise<Profile> {
     const { data, error } = await this.db
       .from('profiles')
-      .select('id, email, display_name, role, active, created_at')
+      .select('id, email, display_name, role, active, owner, created_at')
       .eq('id', this.userId)
       .single();
     if (error) throw toError(error);
