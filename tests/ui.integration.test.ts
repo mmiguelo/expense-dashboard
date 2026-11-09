@@ -112,6 +112,13 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     expect($('authSubmit').textContent).toBe('Iniciar sessão');
     $('authClose').click();
     expect(visible('authPanel')).toBe(false);
+    // The buttons under the description do the same.
+    (document.querySelector('.lcta [data-auth-open="signup"]') as HTMLElement).click();
+    expect($('authSubmit').textContent).toBe('Criar conta');
+    $('authClose').click();
+    (document.querySelector('.lcta [data-auth-open="signin"]') as HTMLElement).click();
+    expect(visible('authPanel')).toBe(true);
+    expect($('authSubmit').textContent).toBe('Iniciar sessão');
   });
 
   it('wrong password shows an error and stays signed out', async () => {

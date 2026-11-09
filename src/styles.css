@@ -87,6 +87,9 @@ details summary{cursor:pointer;font-weight:500}
 .ltitle{font:600 clamp(42px,min(10vw,13vh),132px)/.95 var(--serif);letter-spacing:-.03em;margin:0 auto 18px;max-width:11ch}
 .ltag{max-width:34em;margin:0 auto;color:var(--mute);font-size:clamp(14px,1.6vw,17px)}
 /* Floats in the space above the title, so the page keeps the same layout with or without it. */
+.lcta{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:12px 20px;margin-top:clamp(16px,3vh,26px)}
+.lcta .pr{padding:11px 26px;font-size:15px}
+.lcta .link{font-size:14px}
 .lnote{position:absolute;left:50%;top:calc(min(7vh,64px) / 2);transform:translate(-50%,-50%);white-space:nowrap;transition:opacity .6s;margin:0;padding:5px 12px;background:var(--sf);border:1px solid var(--line);border-radius:2px;font-size:13.5px}
 /* The wheel takes whatever height is left under the text, so they never overlap. */
 .lart{position:relative;flex:1 1 0;min-height:200px;margin-top:clamp(16px,4vh,40px);z-index:1;pointer-events:none;overflow:hidden}
