@@ -5,6 +5,9 @@ import type { MessageKey } from './pt';
 export const en: Record<MessageKey, string> = {
   'page.title': 'Expense dashboard',
   'page.loading': 'Loading…',
+  'notFound.title': 'Page not found',
+  'notFound.text': "This page doesn't exist or has moved. Your expenses are right where you left them.",
+  'notFound.back': 'Back to the dashboard',
   'auth.email': 'Email',
   'auth.password': 'Password',
   'auth.forgot': 'Forgot password?',

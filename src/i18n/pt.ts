@@ -8,6 +8,9 @@ export const pt = {
   // ---- page and screens (index.html) ----
   'page.title': 'Painel de despesas',
   'page.loading': 'A carregar…',
+  'notFound.title': 'Página não encontrada',
+  'notFound.text': 'Esta página não existe ou mudou de sítio. As suas despesas continuam onde as deixou.',
+  'notFound.back': 'Voltar ao painel',
   'auth.email': 'Email',
   'auth.password': 'Palavra-passe',
   'auth.forgot': 'Esqueceu-se da palavra-passe?',

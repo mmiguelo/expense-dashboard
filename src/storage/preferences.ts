@@ -19,6 +19,12 @@ export function saveLanguage(lang: string): void {
   }
 }
 
+/**
+ * The same as savedLanguage(), as a JavaScript expression for pages that can't load the
+ * app's code (the generated 404 page).
+ */
+export const SAVED_LANGUAGE_JS = `(function () { try { return localStorage.getItem(${JSON.stringify(LANGUAGE_KEY)}); } catch (e) { return null; } })()`;
+
 const FOLDED_KEY = 'folded-sections';
 
 /** Ids of the sections collapsed in this browser; null if never changed here. */
