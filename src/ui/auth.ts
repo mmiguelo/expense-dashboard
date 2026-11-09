@@ -66,10 +66,11 @@ const isRateLimited = (err: unknown) => {
 };
 
 /**
- * Wire the signed-out screen: sign in, create an account, request a password reset, or
+ * Wire the sign-in form: sign in, create an account, request a password reset, or
  * resend the confirmation email. Signing in is picked up by the auth listener in main.ts.
+ * Returns a function that switches the form to another mode.
  */
-export function setupAuthScreen(doc: Document, supabase: SupabaseClient): void {
+export function setupAuthScreen(doc: Document, supabase: SupabaseClient): (mode: AuthMode) => void {
   const $ = <T extends HTMLElement = HTMLInputElement>(id: string) => doc.getElementById(id) as T;
   const submit = $<HTMLButtonElement>('authSubmit');
   const resend = $<HTMLButtonElement>('authResend');
@@ -163,6 +164,7 @@ export function setupAuthScreen(doc: Document, supabase: SupabaseClient): void {
   });
 
   setMode('signin');
+  return setMode;
 }
 
 /** The form shown after following a password-reset link. */

@@ -73,9 +73,54 @@ details summary{cursor:pointer;font-weight:500}
 .gate h1{margin-bottom:8px}.gate p{margin:0 0 16px}
 .stack{display:grid;gap:14px}.stack button{width:100%;padding:10px}
 .authmsg{min-height:1.5em;font-size:13px}.authmsg.err{color:var(--bad)}.authmsg.ok{color:var(--ok)}
-.authlinks{margin:4px 0 0}
+.authlinks{margin:4px 0 0;display:flex;flex-wrap:wrap;gap:4px 16px}
 .link{border:0;background:none;padding:0;color:var(--ink);font-weight:500;font-size:13px;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
 .link:hover{background:none;color:var(--acc-strong);text-decoration-color:currentColor}
+
+/* Landing page (signed out): big title, a drawn donut chart rising from the bottom and
+   turning in steps, sign-in in a panel over it. */
+.landing{position:relative;height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column}
+.lnav{position:relative;z-index:3;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px clamp(16px,4vw,40px)}
+.lbrand{font:600 18px/1.2 var(--serif)}
+.lbtns{display:flex;gap:8px}
+.lhero{position:relative;z-index:2;flex:none;text-align:center;padding:min(7vh,64px) 16px 0}
+.ltitle{font:600 clamp(42px,min(10vw,13vh),132px)/.95 var(--serif);letter-spacing:-.03em;margin:0 auto 18px;max-width:11ch}
+.ltag{max-width:34em;margin:0 auto;color:var(--mute);font-size:clamp(14px,1.6vw,17px)}
+.lnote{display:inline-block;margin:16px 0 0;padding:6px 12px;background:var(--sf);border:1px solid var(--line);border-radius:2px;font-size:13.5px}
+/* The wheel takes whatever height is left under the text, so they never overlap. */
+.lart{position:relative;flex:1 1 0;min-height:200px;margin-top:clamp(16px,4vh,40px);z-index:1;pointer-events:none;overflow:hidden}
+.lart svg{position:absolute;left:50%;top:0;width:min(120vw,1250px);margin-left:calc(min(120vw,1250px) / -2);overflow:visible}
+.lring{transform-box:view-box;transform-origin:500px 500px;animation:lturn 24s ease-in-out infinite}
+.llabels{transform-box:view-box;transform-origin:500px 500px;animation:llabels 24s ease-in-out infinite;font:600 19px var(--sans);letter-spacing:.14em;text-transform:uppercase;fill:var(--mute);transition:opacity .3s}
+.panel-open .llabels{opacity:0}
+.lpanel{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:16px;background:rgba(58,46,41,.38);overflow:auto}
+.lpanel[hidden]{display:none}
+.lpanel .card{position:relative;width:100%;max-width:420px;margin:0;border-top:3px double var(--rule);padding:26px}
+.lpanel h1{margin-bottom:8px;padding-right:28px}.lpanel p{margin:0 0 16px}
+.lclose{position:absolute;top:10px;right:10px;font-size:16px}
+/* Loading: the landing wheel, small, in quick quarter turns. */
+.loading{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px}
+.loading[hidden]{display:none}
+.loading p{margin:0;font-size:13.5px}
+.spinner{width:64px;height:64px}
+.spinner svg{display:block;width:100%;height:100%}
+.spinner .lring{animation:lspin 2.4s ease-in-out infinite}
+@keyframes lspin{
+  0%{transform:rotate(0)}20%,25%{transform:rotate(-90deg)}45%,50%{transform:rotate(-180deg)}
+  70%,75%{transform:rotate(-270deg)}95%,100%{transform:rotate(-360deg)}}
+@keyframes lturn{
+  0%{transform:rotate(0)}10%,22%{transform:rotate(-90deg)}32%,44%{transform:rotate(-180deg)}
+  54%,66%{transform:rotate(-270deg)}76%,100%{transform:rotate(-360deg)}}
+@keyframes llabels{
+  0%{transform:rotate(0)}10%,22%{transform:rotate(45deg)}32%,44%{transform:rotate(90deg)}
+  54%,66%{transform:rotate(135deg)}76%,100%{transform:rotate(180deg)}}
+@media (max-width:700px){
+  .ltitle{font-size:15vw}
+  .lart svg{width:210vw;margin-left:-105vw}
+  .lbrand{display:none}
+  .lnav{justify-content:flex-end}}
+@media (prefers-reduced-motion:reduce){.lring,.llabels{animation:none}.spinner{animation:lpulse 1.6s ease-in-out infinite}}
+@keyframes lpulse{50%{opacity:.45}}
 
 .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:22px;padding-bottom:10px;border-bottom:1px solid var(--rule)}.top h1{margin:0}
 .who{display:flex;gap:10px;align-items:center;min-width:0}.who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60vw}

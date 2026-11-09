@@ -5,6 +5,10 @@ import type { MessageKey } from './pt';
 export const en: Record<MessageKey, string> = {
   'page.title': 'Expense dashboard',
   'page.loading': 'Loading…',
+  'landing.tagline': 'Know where your money goes. Expenses, budgets and recurring costs, sorted by category, on any device.',
+  'landing.signedOut': 'Signed out. See you soon!',
+  'landing.close': 'Close',
+  'landing.ring': 'Food,Home,Transport,Health,Leisure,Education,Subscriptions,Insurance,Holidays,Wellbeing',
   'notFound.title': 'Page not found',
   'notFound.text': "This page doesn't exist or has moved. Your expenses are right where you left them.",
   'notFound.back': 'Back to the dashboard',

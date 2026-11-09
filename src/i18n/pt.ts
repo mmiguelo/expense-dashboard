@@ -8,6 +8,10 @@ export const pt = {
   // ---- page and screens (index.html) ----
   'page.title': 'Painel de despesas',
   'page.loading': 'A carregar…',
+  'landing.tagline': 'Saiba para onde vai o seu dinheiro. Despesas, orçamentos e despesas fixas, arrumados por categoria, em qualquer dispositivo.',
+  'landing.signedOut': 'Sessão terminada. Até breve!',
+  'landing.close': 'Fechar',
+  'landing.ring': 'Alimentação,Habitação,Transportes,Saúde,Lazer,Educação,Subscrições,Seguros,Férias,Bem-Estar',
   'notFound.title': 'Página não encontrada',
   'notFound.text': 'Esta página não existe ou mudou de sítio. As suas despesas continuam onde as deixou.',
   'notFound.back': 'Voltar ao painel',

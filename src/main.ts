@@ -3,7 +3,7 @@ import './styles.css';
 import { readSupabaseConfig } from './config';
 import { initLang, t, tn, translateError, translatePage } from './i18n';
 import { LegacyLocalStore } from './storage/legacyLocalStore';
-import { foldedSections, saveFoldedSections, savedLanguage } from './storage/preferences';
+import { foldedSections, markSignedOut, saveFoldedSections, savedLanguage, takeSignedOut } from './storage/preferences';
 import { SupabaseAdminRepository } from './storage/supabaseAdminRepository';
 import { createSupabaseClient } from './storage/supabaseClient';
 import { SupabaseRepository } from './storage/supabaseRepository';
@@ -11,6 +11,7 @@ import type { Profile } from './types';
 import { startAdmin, type AdminHandle } from './ui/admin';
 import { setupAuthScreen, setupRecoveryScreen } from './ui/auth';
 import { setupFolding } from './ui/folding';
+import { donutSvg, setupLanding } from './ui/landing';
 import { importMessage, startApp, type AppHandle } from './ui/app';
 
 const SCREENS = ['loading', 'configError', 'auth', 'recovery', 'deactivated', 'app'] as const;
@@ -28,6 +29,7 @@ function show(screen: Screen): void {
 function main(): void {
   initLang(savedLanguage());
   translatePage(document);
+  $('spinner').innerHTML = donutSvg();
   setupFolding(document, foldedSections(), saveFoldedSections);
   let supabase: SupabaseClient;
   try {
@@ -38,7 +40,8 @@ function main(): void {
     return;
   }
 
-  setupAuthScreen(document, supabase);
+  const landing = setupLanding(document, setupAuthScreen(document, supabase));
+  if (takeSignedOut()) landing.showSignedOut();
   let started: Promise<unknown> | null = null;
   // Arriving from a password-reset email.
   let recovering = /type=recovery/.test(location.hash);
@@ -69,6 +72,8 @@ function main(): void {
 
   const logout = async () => {
     await supabase.auth.signOut({ scope: 'local' });
+    // Back to the landing page, with a "signed out" note.
+    markSignedOut();
     location.reload();
   };
   $('logout').addEventListener('click', logout);
@@ -81,13 +86,23 @@ function showDeactivated(profile: Pick<Profile, 'email'>): void {
 }
 
 async function startSignedIn(supabase: SupabaseClient, session: Session): Promise<void> {
+  // The wheel turns until the dashboard has its data, so it never shows half-filled.
+  show('loading');
   const repo = new SupabaseRepository(supabase, session.user.id);
   const profile = await repo.getProfile();
   if (!profile.active) return showDeactivated(profile);
 
   showAccount(profile);
-  show('app');
-  const app = await startApp({ doc: document, repo, onDeactivated: () => showDeactivated(profile) });
+  let deactivated = false;
+  const app = await startApp({
+    doc: document,
+    repo,
+    onDeactivated: () => {
+      deactivated = true;
+      showDeactivated(profile);
+    },
+  });
+  if (!deactivated) show('app');
 
   let admin: AdminHandle | null = null;
   setupViews(async (view) => {

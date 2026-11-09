@@ -98,6 +98,22 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     expect(document.body.textContent).not.toContain('Local secret');
   });
 
+  it('signed out: the landing page opens the form in the mode of the button, and closes', async () => {
+    await openPage();
+    expect(visible('authPanel')).toBe(false);
+    expect(visible('signedOutNote')).toBe(false);
+    expect($('landingArt').querySelectorAll('.lring path').length).toBeGreaterThan(5);
+    (document.querySelector('[data-auth-open="signup"]') as HTMLElement).click();
+    expect(visible('authPanel')).toBe(true);
+    expect($('authSubmit').textContent).toBe('Criar conta');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(visible('authPanel')).toBe(false);
+    (document.querySelector('[data-auth-open="signin"]') as HTMLElement).click();
+    expect($('authSubmit').textContent).toBe('Iniciar sessão');
+    $('authClose').click();
+    expect(visible('authPanel')).toBe(false);
+  });
+
   it('wrong password shows an error and stays signed out', async () => {
     await openPage();
     type('authEmail', newEmail());
@@ -175,6 +191,7 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     await until(() => !Object.keys(localStorage).some((k) => k.startsWith('sb-')), 'session removed');
     await openPage();
     expect(visible('auth')).toBe(true);
+    expect(visible('signedOutNote')).toBe(true);
     expect($('list').innerHTML).toBe('');
 
     await signUpThroughForm(newEmail());

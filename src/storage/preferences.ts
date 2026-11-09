@@ -25,6 +25,28 @@ export function saveLanguage(lang: string): void {
  */
 export const SAVED_LANGUAGE_JS = `(function () { try { return localStorage.getItem(${JSON.stringify(LANGUAGE_KEY)}); } catch (e) { return null; } })()`;
 
+const SIGNED_OUT_KEY = 'signed-out';
+
+/** Remember, for the next page load in this tab only, that the user just logged out. */
+export function markSignedOut(): void {
+  try {
+    sessionStorage.setItem(SIGNED_OUT_KEY, '1');
+  } catch {
+    // The "signed out" note just isn't shown.
+  }
+}
+
+/** Whether the user just logged out in this tab; reading it clears it. */
+export function takeSignedOut(): boolean {
+  try {
+    const was = sessionStorage.getItem(SIGNED_OUT_KEY) !== null;
+    sessionStorage.removeItem(SIGNED_OUT_KEY);
+    return was;
+  } catch {
+    return false;
+  }
+}
+
 const FOLDED_KEY = 'folded-sections';
 
 /** Ids of the sections collapsed in this browser; null if never changed here. */

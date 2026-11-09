@@ -5,12 +5,22 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
 </head><body>
-<div class="gate" id="loading"><p class="mute" data-i18n="page.loading">A carregar…</p></div>
+<div class="loading" id="loading" role="status"><div class="spinner" id="spinner" aria-hidden="true"></div><p class="mute" data-i18n="page.loading">A carregar…</p></div>
 
 <div class="gate" id="configError" hidden><section class="card"><h1 data-i18n="page.title">Painel de despesas</h1><p id="configMsg"></p></section></div>
 
-<div class="gate" id="auth" hidden><section class="card">
-<h1 data-i18n="page.title">Painel de despesas</h1>
+<div class="landing" id="auth" hidden>
+<header class="lnav"><span class="lbrand" data-i18n="page.title">Painel de despesas</span>
+<div class="lbtns"><button type="button" data-auth-open="signin" data-i18n="auth.signin.submit">Iniciar sessão</button><button type="button" class="pr" data-auth-open="signup" data-i18n="auth.signup.submit">Criar conta</button></div></header>
+<div class="lhero">
+<h1 class="ltitle" data-i18n="page.title">Painel de despesas</h1>
+<p class="ltag" data-i18n="landing.tagline">Saiba para onde vai o seu dinheiro.</p>
+<p class="lnote" id="signedOutNote" role="status" hidden data-i18n="landing.signedOut">Sessão terminada. Até breve!</p>
+</div>
+<div class="lart" id="landingArt" aria-hidden="true"></div>
+<div class="lpanel" id="authPanel" hidden><section class="card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+<button type="button" class="x lclose" id="authClose" aria-label="Fechar" data-i18n-aria-label="landing.close">✕</button>
+<h1 id="authTitle" data-i18n="page.title">Painel de despesas</h1>
 <p class="mute" id="authIntro" data-i18n="auth.signin.intro">Inicie sessão para ver as suas despesas em qualquer dispositivo.</p>
 <form id="authForm" class="stack" novalidate>
 <label><span data-i18n="auth.email">Email</span><input type="email" id="authEmail" autocomplete="email" required></label>
@@ -19,8 +29,9 @@
 </form>
 <p class="authmsg" id="authMsg" role="status" aria-live="polite"></p>
 <p class="authlinks" id="authResendRow" hidden><button type="button" id="authResend" data-i18n="auth.resend">Reenviar email de confirmação</button></p>
-<p class="mute authlinks"><button type="button" class="link" id="authSwitch" data-i18n="auth.signin.switch">Criar conta</button> · <button type="button" class="link" id="authForgot" data-i18n="auth.forgot">Esqueceu-se da palavra-passe?</button></p>
+<p class="mute authlinks"><button type="button" class="link" id="authSwitch" data-i18n="auth.signin.switch">Criar conta</button><button type="button" class="link" id="authForgot" data-i18n="auth.forgot">Esqueceu-se da palavra-passe?</button></p>
 </section></div>
+</div>
 
 <div class="gate" id="recovery" hidden><section class="card">
 <h1 data-i18n="recovery.title">Escolha uma nova palavra-passe</h1>
