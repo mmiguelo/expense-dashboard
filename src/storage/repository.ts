@@ -26,6 +26,8 @@ export interface ImportResult {
 export interface Repository {
   /** The signed-in user's account: email, role, whether it is active. */
   getProfile(): Promise<Profile>;
+  /** The name shown for this account (up to 100 characters; may be empty). */
+  updateDisplayName(name: string): Promise<void>;
 
   /** In the order they were added. */
   listTransactions(): Promise<Transaction[]>;

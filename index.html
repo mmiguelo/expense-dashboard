@@ -53,8 +53,13 @@
 <main id="app" hidden>
 <header class="top"><h1 data-i18n="page.title">Painel de despesas</h1>
 <nav class="seg views" id="views" aria-label="Ecrãs" data-i18n-aria-label="nav.screens"><button type="button" data-view="dashboard" class="on" data-i18n="nav.dashboard">Painel</button><button type="button" data-view="settings" data-i18n="nav.settings">Definições</button><button type="button" data-view="admin" id="adminNav" hidden data-i18n="nav.admin">Administração</button></nav>
-<details class="acct" id="acct"><summary aria-label="Conta" data-i18n-aria-label="account.menu"><span id="who"></span></summary>
-<div class="acctmenu"><div class="mute" data-i18n="account.signedInAsLabel">Sessão iniciada como</div><div id="acctEmail"></div><div><span class="badge" id="acctRole"></span></div><button type="button" id="logout" data-i18n="account.logout">Terminar sessão</button></div></details>
+<details class="acct" id="acct"><summary class="avatar" aria-label="Conta" data-i18n-aria-label="account.menu" data-i18n-title="account.menu" title="Conta"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 19.4c1.2-3.4 3.9-5.1 7.2-5.1s6 1.7 7.2 5.1"/></svg></summary>
+<div class="acctmenu">
+<div class="accthead"><div id="who"></div><div class="mute" id="acctEmail"></div><div><span class="badge" id="acctRole"></span></div></div>
+<button type="button" class="menuitem" data-view="account" data-i18n="account.title">A minha conta</button>
+<button type="button" class="menuitem langtoggle" id="langToggle" aria-expanded="false" aria-controls="langList"><span data-i18n="account.language">Idioma</span><span class="mute" id="langCurrent"></span></button>
+<div class="langlist" id="langList" role="menu" hidden></div>
+<button type="button" class="menuitem" id="logout" data-i18n="account.logout">Terminar sessão</button></div></details>
 </header>
 <section class="card" id="localImport" hidden><h2 data-i18n="localImport.title">Dados de antes de ter conta</h2>
 <p class="mute" id="localImportText"></p>
@@ -86,6 +91,13 @@
 
 </div>
 
+<div id="viewAccount" hidden>
+<section class="card"><h2 data-i18n="account.title">A minha conta</h2>
+<form id="nameForm" class="fg" novalidate><label><span data-i18n="account.name">Nome</span><input id="acctName" maxlength="100" autocomplete="name"></label><label><span data-i18n="auth.email">Email</span><input id="acctEmailField" readonly></label><button type="submit" data-i18n="common.save">Guardar</button></form></section>
+<section class="card"><h2 data-i18n="account.password">Palavra-passe</h2>
+<form id="pwForm" class="fg" novalidate><label><span data-i18n="recovery.newPassword">Nova palavra-passe</span><input type="password" id="pwNew" autocomplete="new-password" minlength="8"></label><label><span data-i18n="account.confirmPassword">Confirmar palavra-passe</span><input type="password" id="pwConfirm" autocomplete="new-password" minlength="8"></label><button type="submit" class="pr" data-i18n="account.changePassword">Alterar palavra-passe</button></form>
+<p class="authmsg" id="pwMsg" role="status" aria-live="polite"></p></section>
+</div>
 <div id="viewSettings" hidden>
 <section class="card fold folded" id="secCategories"><h2><button type="button" class="foldbtn" aria-expanded="false" aria-controls="secCategories" data-i18n-title="common.expand" title="Mostrar mais"><span data-i18n="settings.categories">Categorias</span></button></h2>
 <p class="mute" data-i18n="settings.categoriesHelp">Mudar o nome ou apagar uma categoria atualiza os seus movimentos, despesas fixas, regras e orçamentos.</p>

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { INCOME_CATEGORY, normalizeKeyword } from '../categories';
+import { t } from '../i18n';
 import { generatedKey, parseGeneratedKey } from '../recurring';
 import type {
   Budgets,
@@ -208,6 +209,12 @@ export class SupabaseRepository implements Repository {
       .single();
     if (error) throw toError(error);
     return profileFromRow(data);
+  }
+
+  async updateDisplayName(name: string): Promise<void> {
+    const { data, error } = await this.db.from('profiles').update({ display_name: name }).eq('id', this.userId).select('id');
+    if (error) throw toError(error);
+    if (!data?.length) throw new Error(t('admin.err.notAllowed'));
   }
 
   /** Every row of a query, fetched a page at a time. */

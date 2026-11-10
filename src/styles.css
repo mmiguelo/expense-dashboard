@@ -133,10 +133,32 @@ details summary{cursor:pointer;font-weight:500}
 .views{margin-left:auto}.views button{padding:6px 12px}
 
 .acct{position:relative}
-.acct summary{list-style:none;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;border-color:var(--line)}
+.acct summary{list-style:none}
+/* The account button: a round user icon. */
+.avatar{display:grid;place-items:center;width:36px;height:36px;padding:0;border-radius:50%;border-color:var(--rule);background:var(--sf);cursor:pointer}
+.avatar svg{width:20px;height:20px;fill:none;stroke:var(--ink);stroke-width:1.7;stroke-linecap:round}
+.avatar:hover,.acct[open] .avatar{background:var(--hover);border-color:var(--mute)}
 .acct summary::-webkit-details-marker{display:none}
 .acctmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:10;background:var(--sf);border:1px solid var(--rule);border-radius:2px;padding:14px;display:grid;gap:8px;min-width:230px;box-shadow:4px 4px 0 var(--line)}
-.acctmenu #acctEmail{font-weight:500;word-break:break-all}
+.acctmenu{gap:2px;padding:6px;min-width:250px}
+.accthead{display:grid;gap:4px;padding:10px 10px 12px;margin-bottom:4px;border-bottom:1px solid var(--line)}
+#who{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#acctEmail{font-size:13px;word-break:break-all}
+.menuitem{border:0;text-align:left;padding:8px 10px;font-weight:400;border-radius:2px}
+.menuitem:hover{background:var(--hover)}
+.langtoggle{display:flex;justify-content:space-between;gap:12px}
+.langlist{display:grid;gap:2px;margin:0 0 2px 12px;padding-left:8px;border-left:1px solid var(--line)}
+.langopt[aria-checked="true"]{font-weight:600}
+#logout{margin-top:4px;border-top:1px solid var(--line);border-radius:0 0 2px 2px;color:var(--bad)}
+
+/* Show/hide password */
+.pwwrap{position:relative;display:block}
+.pwwrap input{width:100%;padding-right:40px}
+.pwtoggle{position:absolute;right:2px;top:50%;transform:translateY(-50%);border:0;background:none;padding:6px 8px;color:var(--mute);display:grid;place-items:center}
+.pwtoggle:hover{background:none;color:var(--ink)}
+.pwtoggle svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.pwtoggle[aria-pressed="false"] .slash{display:none}
+.stack .pwtoggle{width:auto;padding:6px 8px}
 
 .badge{display:inline-block;font:500 11px/1.4 var(--mono);text-transform:uppercase;letter-spacing:.05em;padding:1px 6px;border-radius:1px;border:1px solid var(--line);background:transparent;color:var(--mute)}
 .badge.admin{border-color:var(--olive);color:var(--olive)}
@@ -194,3 +216,6 @@ input[type=color]:focus-visible{outline:0;border-color:var(--acc-strong);box-sha
 .fold.folded .foldbtn{border-bottom-color:transparent;padding-bottom:0}
 .fold.folded .foldbtn::after{transform:translateY(1px) rotate(-135deg)}
 .fold.folded>:not(h2){display:none!important}
+
+input[readonly]{background:transparent;color:var(--mute);border-style:dashed}
+input[readonly]:hover,input[readonly]:focus{border-color:var(--line)}

@@ -3,20 +3,23 @@ import './styles.css';
 import { readSupabaseConfig } from './config';
 import { initLang, t, tn, translateError, translatePage } from './i18n';
 import { LegacyLocalStore } from './storage/legacyLocalStore';
-import { foldedSections, markSignedOut, saveFoldedSections, savedLanguage, takeSignedOut } from './storage/preferences';
+import { foldedSections, markSignedOut, saveFoldedSections, saveLanguage, savedLanguage, takeSignedOut } from './storage/preferences';
 import { SupabaseAdminRepository } from './storage/supabaseAdminRepository';
 import { createSupabaseClient } from './storage/supabaseClient';
 import { SupabaseRepository } from './storage/supabaseRepository';
 import type { Profile } from './types';
 import { startAdmin, type AdminHandle } from './ui/admin';
+import { setupAccount } from './ui/account';
 import { setupAuthScreen, setupRecoveryScreen } from './ui/auth';
 import { setupFolding } from './ui/folding';
 import { donutSvg, setupLanding } from './ui/landing';
+import { setupLanguageMenu } from './ui/language';
+import { setupPasswordToggles } from './ui/password';
 import { importMessage, startApp, type AppHandle } from './ui/app';
 
 const SCREENS = ['loading', 'configError', 'auth', 'recovery', 'deactivated', 'app'] as const;
 type Screen = (typeof SCREENS)[number];
-const VIEWS = ['dashboard', 'settings', 'admin'] as const;
+const VIEWS = ['dashboard', 'account', 'settings', 'admin'] as const;
 type View = (typeof VIEWS)[number];
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -30,6 +33,12 @@ function main(): void {
   initLang(savedLanguage());
   translatePage(document);
   $('spinner').innerHTML = donutSvg();
+  setupPasswordToggles(document);
+  setupLanguageMenu(document, (lang) => {
+    // Everything on the page was drawn in the old language: start again in the new one.
+    saveLanguage(lang);
+    location.reload();
+  });
   setupFolding(document, foldedSections(), saveFoldedSections);
   let supabase: SupabaseClient;
   try {
@@ -111,6 +120,7 @@ async function startSignedIn(supabase: SupabaseClient, session: Session): Promis
     await admin.refresh();
   });
   $('adminNav').hidden = profile.role !== 'admin';
+  setupAccount({ doc: document, supabase, repo, profile, notify: app.notify, onNameChanged: (name) => showAccount({ ...profile, displayName: name }) });
 
   // Coming back to the tab: pick up changes from other devices, and deactivation.
   document.addEventListener('visibilitychange', () => {
@@ -127,15 +137,19 @@ function showAccount(profile: Profile): void {
   $('acctRole').className = `badge ${profile.role === 'admin' ? 'admin' : ''}`;
 }
 
+/** Screens open from the tabs and from the account menu. */
 function setupViews(onOpen: (view: View) => Promise<void>): void {
-  const ids: Record<View, string> = { dashboard: 'viewDashboard', settings: 'viewSettings', admin: 'viewAdmin' };
-  $('views').addEventListener('click', (e) => {
-    const view = (e.target as HTMLElement).dataset.view as View | undefined;
+  const ids: Record<View, string> = { dashboard: 'viewDashboard', account: 'viewAccount', settings: 'viewSettings', admin: 'viewAdmin' };
+  const open = (e: Event) => {
+    const view = (e.target as HTMLElement).closest<HTMLElement>('[data-view]')?.dataset.view as View | undefined;
     if (!view) return;
     for (const v of VIEWS) $(ids[v]).hidden = v !== view;
     document.querySelectorAll<HTMLElement>('#views button').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
+    ($('acct') as HTMLDetailsElement).open = false;
     void onOpen(view);
-  });
+  };
+  $('views').addEventListener('click', open);
+  $('acct').addEventListener('click', open);
 }
 
 /** Offer to upload data saved in this browser before accounts existed. */

@@ -1,4 +1,5 @@
 import { en } from './en';
+import { es } from './es';
 import { pt, type MessageKey } from './pt';
 
 // Every text the user sees comes from here. Portuguese is the default; add a language by
@@ -6,7 +7,9 @@ import { pt, type MessageKey } from './pt';
 
 export type { MessageKey };
 
-export const LANGUAGES = { pt, en } as const;
+export const LANGUAGES = { pt, en, es } as const;
+/** Each language's name, written in that language (shown in the language menu). */
+export const LANGUAGE_NAMES: Record<keyof typeof LANGUAGES, string> = { pt: 'Português', en: 'English', es: 'Español' };
 export type Lang = keyof typeof LANGUAGES;
 export const DEFAULT_LANG: Lang = 'pt';
 

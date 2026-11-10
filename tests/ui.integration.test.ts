@@ -206,6 +206,65 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     expect($('sum').textContent).toContain('0,00');
   });
 
+  it('the eye button shows and hides the password', async () => {
+    await openPage();
+    const toggle = $('authPass').parentElement!.querySelector<HTMLButtonElement>('.pwtoggle')!;
+    expect($('authPass').type).toBe('password');
+    expect(toggle.getAttribute('aria-label')).toBe('Mostrar palavra-passe');
+    toggle.click();
+    expect($('authPass').type).toBe('text');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toBe('Ocultar palavra-passe');
+    toggle.click();
+    expect($('authPass').type).toBe('password');
+  });
+
+  it('account menu: opens My account, saves the name and changes the password', async () => {
+    const email = newEmail();
+    await openPage();
+    await signUpThroughForm(email);
+    (document.querySelector('#acct [data-view="account"]') as HTMLElement).click();
+    expect(visible('viewAccount')).toBe(true);
+    expect(visible('viewDashboard')).toBe(false);
+    expect($('acctEmailField').value).toBe(email);
+
+    type('acctName', 'Miguel');
+    $<HTMLFormElement>('nameForm').requestSubmit();
+    await until(() => $('who').textContent === 'Miguel', 'name in the menu');
+    expect((await (await accountRepo(email)).getProfile()).displayName).toBe('Miguel');
+
+    type('pwNew', 'another-password');
+    type('pwConfirm', 'different');
+    $<HTMLFormElement>('pwForm').requestSubmit();
+    expect($('pwMsg').textContent).toBe('As palavras-passe não coincidem.');
+    type('pwConfirm', 'another-password');
+    $<HTMLFormElement>('pwForm').requestSubmit();
+    await until(() => $('pwMsg').textContent === 'Palavra-passe alterada.', 'password changed');
+    const db = createClient(URL!, KEY!, { auth: { persistSession: false } });
+    expect((await db.auth.signInWithPassword({ email, password: 'another-password' })).error).toBeNull();
+  });
+
+  it('language menu: lists the languages and reopens the page in the chosen one', async () => {
+    await openPage();
+    await signUpThroughForm(newEmail());
+    expect($('langCurrent').textContent).toBe('Português');
+    expect(visible('langList')).toBe(false);
+    $('langToggle').click();
+    expect(visible('langList')).toBe(true);
+    const options = [...document.querySelectorAll<HTMLElement>('#langList [data-lang]')];
+    expect(options.map((o) => o.dataset.lang)).toEqual(['pt', 'en', 'es']);
+    expect(options[0]!.getAttribute('aria-checked')).toBe('true');
+
+    (document.querySelector('#langList [data-lang="es"]') as HTMLElement).click();
+    expect(localStorage.getItem('lang')).toBe('es');
+    await openPage(); // the reload
+    await until(() => onDashboard(), 'dashboard after reload');
+    expect(document.documentElement.lang).toBe('es');
+    expect(document.title).toBe('Panel de gastos');
+    expect($('langCurrent').textContent).toBe('Español');
+    expect(document.querySelector('#views [data-view="settings"]')!.textContent).toBe('Ajustes');
+  });
+
   it('shows the account menu with email and role; members get no Admin screen', async () => {
     const email = newEmail();
     await openPage();
