@@ -486,18 +486,17 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     const adjustment = (await (await accountRepo(email)).listTransactions()).find((x) => x.type === 'a')!;
     expect(adjustment.amount).toBe(150);
 
-    // Deleting an entry keeps it, out of every total, until it is restored.
+    // Deleting an entry: gone for the user (the database keeps it, marked deleted); undo brings it back.
     const groceries = (await (await accountRepo(email)).listTransactions()).find((x) => x.desc === 'Mercado')!;
     (document.querySelector(`[data-del="${groceries.id}"]`) as HTMLElement).click();
     await until(() => !$('list').textContent!.includes('Mercado'), 'expense gone from the list');
     expect($('ovBody').textContent).toContain('150,00');
     expect((await (await accountRepo(email)).listTransactions()).find((x) => x.id === groceries.id)!.del).toBeTruthy();
     openView('settings');
-    expect($('dlist').textContent).toContain('Mercado');
-    (document.querySelector(`[data-trestore="${groceries.id}"]`) as HTMLElement).click();
-    await until(() => !$('dlist').textContent!.includes('Mercado'), 'restored');
+    expect(document.body.textContent).not.toContain('Movimentos eliminados');
     openView('dashboard');
-    expect($('list').textContent).toContain('Mercado');
+    $('undo').click();
+    await until(() => $('list').textContent!.includes('Mercado'), 'undone');
     expect($('ovBody').textContent).toContain('120,00');
   });
 

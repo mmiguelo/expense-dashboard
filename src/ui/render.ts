@@ -182,18 +182,6 @@ export function currencyOptions(selected = 'EUR'): string {
     .join('');
 }
 
-/** Soft-deleted transactions, most recently deleted first, each with a restore button. */
-export function deletedTransactionsHtml(txs: Transaction[]): string {
-  const deleted = txs.filter((x) => x.del).sort((a, b) => b.del!.localeCompare(a.del!));
-  if (!deleted.length) return `<div class="mute">${t('settings.deletedEmpty')}</div>`;
-  return deleted
-    .map(
-      (x) =>
-        `<div class="row" style="grid-template-columns:1fr auto auto"><div>${esc(x.desc)}<div class="mute">${formatDmy(x.date)}${x.cat ? `, ${categoryLabel(x.cat, x.sub)}` : ''}</div></div><b>${eur(Math.abs(x.amount))}</b><button type="button" data-trestore="${x.id}">${t('acc.restore')}</button></div>`,
-    )
-    .join('');
-}
-
 // ---- Accounts ----
 
 export const ACCOUNT_KINDS: Account['kind'][] = ['checking', 'savings', 'restricted', 'credit'];
@@ -245,18 +233,6 @@ export const accountSettingsHtml = (balances: AccountBalance[]): string =>
         `<div class="row" style="grid-template-columns:1fr auto auto"><div>${esc(a.name)}<div class="mute">${accountMeta(a)}</div></div><b class="${balance < 0 ? 'up' : ''}">${eur(balance)}</b><div><button class="x" data-aedit="${a.id}" aria-label="${esc(t('common.edit'))}">✎</button><button type="button" class="linkbtn" data-aarch="${a.id}">${t(a.archived ? 'acc.unarchive' : 'acc.archive')}</button><button class="x" data-adel="${a.id}" aria-label="${esc(t('common.delete'))}">✕</button></div></div>`,
     )
     .join('');
-
-/** Soft-deleted accounts, each with a restore button; nothing when there are none. */
-export const deletedAccountsHtml = (accounts: Account[]): string =>
-  accounts.length
-    ? `<h3 class="subhead">${t('acc.deletedTitle')}</h3>` +
-      accounts
-        .map(
-          (a) =>
-            `<div class="row" style="grid-template-columns:1fr auto"><div>${esc(a.name)}<div class="mute">${accountMeta(a)}</div></div><button type="button" data-arestore="${a.id}">${t('acc.restore')}</button></div>`,
-        )
-        .join('')
-    : '';
 
 /** Purchases money back can pay back, each with a share box; `shares` are the chosen ones. */
 export const settleRowsHtml = (outstanding: Outstanding[], shares: Record<string, number>): string =>

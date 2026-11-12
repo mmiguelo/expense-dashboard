@@ -330,12 +330,10 @@ export const pt = {
   'acc.archive': 'Arquivar',
   'acc.unarchive': 'Reabrir',
   'acc.archived': 'arquivada',
-  'acc.deletedTitle': 'Contas eliminadas',
-  'acc.restore': 'Restaurar',
   'acc.nameRequired': 'Indique um nome para a conta.',
   'acc.blocked.last': 'Precisa de pelo menos uma conta aberta.',
   'acc.blocked.transfers': 'Esta conta tem transferências de ou para outras contas. Arquive-a em vez de a eliminar.',
-  'acc.confirmDelete': 'Eliminar a conta "{name}"? Os movimentos dela deixam de contar em saldos e relatórios. Pode restaurá-la mais tarde.',
+  'acc.confirmDelete': 'Eliminar a conta "{name}"? Os movimentos dela deixam de contar em saldos e relatórios.',
   'form.moneyBack': 'Dinheiro de volta',
   'form.reimbursable': 'Reembolsável (alguém vai pagar-lhe)',
   'form.settles': 'Este dinheiro paga estas compras reembolsáveis:',
@@ -356,10 +354,6 @@ export const pt = {
   'form.adjustment': 'Acerto de saldo',
   'form.correctBalance': 'Saldo correto ({symbol})',
   'form.adjustNone': 'O saldo dessa conta nessa data já é esse.',
-  'settings.deleted': 'Movimentos eliminados',
-  'settings.deletedHelp': 'Os movimentos eliminados deixam de contar, mas ficam aqui para os poder restaurar.',
-  'settings.deletedEmpty': 'Nenhum movimento eliminado.',
-  'tx.restored': 'Movimento restaurado.',
 } as const;
 
 export type MessageKey = keyof typeof pt;

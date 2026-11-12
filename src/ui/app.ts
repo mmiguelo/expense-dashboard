@@ -317,8 +317,6 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     );
     $('rlist').innerHTML = html.recurringListHtml(data.rec, data.cats, data.accounts);
     $('alist').innerHTML = html.accountSettingsHtml(overview(data.accounts, data.txs).balances);
-    $('adeleted').innerHTML = html.deletedAccountsHtml(data.accounts.filter((a) => a.deletedAt));
-    $('dlist').innerHTML = html.deletedTransactionsHtml(data.txs);
     const open = new Set([...doc.querySelectorAll<HTMLDetailsElement>('[data-subs]')].filter((d) => d.open).map((d) => d.dataset.subs!));
     $('catList').innerHTML = html.categoryEditorHtml(data.cats, categoryUsage(), data.subs, open, data.kinds);
     renderRules();
@@ -576,24 +574,12 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       const x = data.txs.find((t) => String(t.id) === d.del);
       if (!x) return;
       lastDeleted = x;
-      // Soft delete: it stops counting and can be restored from Settings.
+      // Soft delete: kept in the database only; for the user it is simply gone (undo aside).
       void update(
         () => repo.saveTransaction({ ...x, del: new Date().toISOString() }),
         async () => {
           await render();
           toast(t('tx.deleted'), true);
-        },
-      );
-    }
-    if (d.trestore) {
-      const x = data.txs.find((t) => t.id === d.trestore);
-      if (!x) return;
-      const { del: _del, ...restored } = x;
-      void update(
-        () => repo.saveTransaction(restored),
-        async () => {
-          await render();
-          toast(t('tx.restored'));
         },
       );
     }
@@ -863,7 +849,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   $('asave').addEventListener('click', saveAccountForm);
   $('acancel').addEventListener('click', resetAccountForm);
   doc.addEventListener('click', (e) => {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-accf],[data-aedit],[data-aarch],[data-adel],[data-arestore]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-accf],[data-aedit],[data-aarch],[data-adel]');
     if (!el) return;
     const d = el.dataset;
     if (d.accf !== undefined) {
@@ -885,8 +871,6 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       if (!win.confirm(t('acc.confirmDelete', { name: a.name }))) return;
       if (accountEditId === a.id) resetAccountForm();
       changeAccount(a.id, (x) => ({ ...x, deletedAt: new Date().toISOString() }));
-    } else if (d.arestore) {
-      changeAccount(d.arestore, ({ deletedAt: _deletedAt, ...x }) => x);
     }
   });
 
