@@ -1,4 +1,5 @@
 import type {
+  Account,
   Budgets,
   Categories,
   GeneratedMonths,
@@ -28,6 +29,11 @@ export interface Repository {
   getProfile(): Promise<Profile>;
   /** The name shown for this account (up to 100 characters; may be empty). */
   updateDisplayName(name: string): Promise<void>;
+
+  /** Every account, including archived and soft-deleted ones, in the order added. */
+  listAccounts(): Promise<Account[]>;
+  /** Insert, or replace the account with the same id (also archives, deletes, restores). */
+  saveAccount(account: Account): Promise<void>;
 
   /** In the order they were added. */
   listTransactions(): Promise<Transaction[]>;

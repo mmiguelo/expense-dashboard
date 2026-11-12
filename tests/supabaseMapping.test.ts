@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readSupabaseConfig } from '../src/config';
-import { ruleFromRow, ruleToRow, toImportPayload, txFromRow, txToRow } from '../src/storage/supabaseRepository';
-import type { RecurringExpense, Transaction } from '../src/types';
+import { accountFromRow, accountToRow, ruleFromRow, ruleToRow, toImportPayload, txFromRow, txToRow } from '../src/storage/supabaseRepository';
+import type { Account, RecurringExpense, Transaction } from '../src/types';
 
 describe('row mapping', () => {
   it('round-trips transactions', () => {
@@ -130,5 +130,24 @@ describe('readSupabaseConfig', () => {
   it('refuses secret keys', () => {
     expect(() => readSupabaseConfig({ VITE_SUPABASE_URL: 'u', VITE_SUPABASE_ANON_KEY: jwt('service_role') })).toThrow(/secret/);
     expect(() => readSupabaseConfig({ VITE_SUPABASE_URL: 'u', VITE_SUPABASE_ANON_KEY: 'sb_secret_abc' })).toThrow(/secret/);
+  });
+});
+
+describe('account rows', () => {
+  it('round-trip, with numeric balances sent as strings', () => {
+    const account: Account = {
+      id: 'a',
+      name: 'Poupança',
+      kind: 'savings',
+      currency: 'EUR',
+      openingBalance: 3000,
+      openingDate: '2026-11-01',
+      institution: 'Bank B',
+      archived: false,
+    };
+    expect(accountFromRow(accountToRow(account))).toEqual(account);
+    expect(accountFromRow({ ...accountToRow(account), opening_balance: '12.30' as unknown as number }).openingBalance).toBe(12.3);
+    const deleted = { ...account, deletedAt: '2026-11-12T10:00:00Z' };
+    expect(accountFromRow(accountToRow(deleted))).toEqual(deleted);
   });
 });

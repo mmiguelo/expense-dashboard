@@ -74,6 +74,31 @@ export interface KeywordRule {
   category: string;
 }
 
+/**
+ * Where money is. The kind decides behaviour through generic rules only: checking counts
+ * as available to spend; savings, restricted (meal card, benefits wallet) and credit don't;
+ * a credit balance is normally negative (a debt).
+ */
+export type AccountKind = 'checking' | 'savings' | 'restricted' | 'credit';
+
+export interface Account {
+  id: string;
+  name: string;
+  kind: AccountKind;
+  /** ISO 4217 code. Always the profile's currency until accounts can have their own. */
+  currency: string;
+  /** Balance on `openingDate`, before that day's transactions. */
+  openingBalance: number;
+  /** YYYY-MM-DD. Transactions before this date don't change the balance. */
+  openingDate: string;
+  /** A label only, e.g. the bank's name; never used in logic. */
+  institution: string;
+  /** Closed but part of history: hidden from the form, still in reports. */
+  archived: boolean;
+  /** Soft-deleted (ISO timestamp): left out of everything until restored. */
+  deletedAt?: string;
+}
+
 export type Role = 'admin' | 'member';
 
 export interface Profile {
@@ -85,6 +110,8 @@ export interface Profile {
   /** The protected admin: nobody can demote, deactivate or delete it. */
   owner: boolean;
   createdAt: string;
+  /** ISO 4217 code totals are shown in. */
+  currency: string;
 }
 
 /** Everything the app stores, in the backup shape. */

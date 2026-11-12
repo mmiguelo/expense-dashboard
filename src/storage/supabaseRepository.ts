@@ -4,6 +4,7 @@ import { fixedCategoryOf, normalizeKeyword } from '../categories';
 import { t } from '../i18n';
 import { generatedKey, parseGeneratedKey } from '../recurring';
 import type {
+  Account,
   Budgets,
   Categories,
   GeneratedMonths,
@@ -82,7 +83,44 @@ export interface ProfileRow {
   active: boolean;
   owner: boolean;
   created_at: string;
+  currency?: string;
 }
+
+export interface AccountRow {
+  id: string;
+  name: string;
+  kind: Account['kind'];
+  currency: string;
+  opening_balance: number;
+  opening_date: string;
+  institution: string;
+  archived: boolean;
+  deleted_at: string | null;
+}
+
+export const accountFromRow = (r: AccountRow): Account => ({
+  id: r.id,
+  name: r.name,
+  kind: r.kind,
+  currency: r.currency,
+  openingBalance: Number(r.opening_balance),
+  openingDate: r.opening_date,
+  institution: r.institution,
+  archived: r.archived,
+  ...(r.deleted_at ? { deletedAt: r.deleted_at } : {}),
+});
+
+export const accountToRow = (a: Account): AccountRow => ({
+  id: a.id,
+  name: a.name,
+  kind: a.kind,
+  currency: a.currency,
+  opening_balance: a.openingBalance,
+  opening_date: a.openingDate,
+  institution: a.institution,
+  archived: a.archived,
+  deleted_at: a.deletedAt ?? null,
+});
 
 export const profileFromRow = (r: ProfileRow): Profile => ({
   id: r.id,
@@ -92,6 +130,7 @@ export const profileFromRow = (r: ProfileRow): Profile => ({
   active: r.active,
   owner: r.owner ?? false,
   createdAt: r.created_at,
+  currency: r.currency ?? 'EUR',
 });
 
 export const ruleFromRow = (r: RecurringRow): RecurringExpense => ({
@@ -205,7 +244,7 @@ export class SupabaseRepository implements Repository {
   async getProfile(): Promise<Profile> {
     const { data, error } = await this.db
       .from('profiles')
-      .select('id, email, display_name, role, active, owner, created_at')
+      .select('id, email, display_name, role, active, owner, created_at, currency')
       .eq('id', this.userId)
       .single();
     if (error) throw toError(error);
@@ -227,6 +266,21 @@ export class SupabaseRepository implements Repository {
       out.push(...(data ?? []));
       if (!data || data.length < PAGE) return out;
     }
+  }
+
+  async listAccounts(): Promise<Account[]> {
+    const rows = await this.all<AccountRow>((from, to) =>
+      this.db
+        .from('accounts')
+        .select('id, name, kind, currency, opening_balance, opening_date, institution, archived, deleted_at')
+        .order('seq')
+        .range(from, to),
+    );
+    return rows.map(accountFromRow);
+  }
+
+  async saveAccount(account: Account): Promise<void> {
+    check(await this.db.from('accounts').upsert(accountToRow(account)));
   }
 
   async listTransactions(): Promise<Transaction[]> {
