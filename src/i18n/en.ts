@@ -327,4 +327,12 @@ export const en: Record<MessageKey, string> = {
   'acc.blocked.last': 'You need at least one open account.',
   'acc.blocked.transfers': 'This account has transfers to or from other accounts. Archive it instead of deleting it.',
   'acc.confirmDelete': 'Delete the account "{name}"? Its entries stop counting in balances and reports. You can restore it later.',
+  'form.moneyBack': 'Money back',
+  'form.reimbursable': 'Reimbursable (someone will pay you back)',
+  'form.settles': 'This money pays back these reimbursable purchases:',
+  'form.settleTooMuch': 'The shares add up to more than the amount received.',
+  'form.share': 'Share',
+  'list.owed': 'still owed {amount}',
+  'list.settled': 'paid back',
+  'ov.owed': 'owed to you',
 };

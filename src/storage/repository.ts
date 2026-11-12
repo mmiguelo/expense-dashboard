@@ -11,6 +11,7 @@ import type {
   Snapshot,
   Subcategories,
   Transaction,
+  TransactionLink,
 } from '../types';
 
 export interface ImportResult {
@@ -40,6 +41,10 @@ export interface Repository {
   /** Insert, or replace the transaction with the same id. */
   saveTransaction(tx: Transaction): Promise<void>;
   deleteTransaction(id: string): Promise<void>;
+
+  listLinks(): Promise<TransactionLink[]>;
+  /** Replace what the money back `repayment` settles (empty: nothing). */
+  setLinks(repayment: string, items: { purchase: string; amount: number }[]): Promise<void>;
 
   listRecurring(): Promise<RecurringExpense[]>;
   saveRecurring(rule: RecurringExpense): Promise<void>;

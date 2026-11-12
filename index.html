@@ -67,7 +67,7 @@
 <div id="viewDashboard">
 <section class="card"><h2 id="fT" data-i18n="form.addTitle">Adicionar movimento</h2>
 <div id="f" class="fg">
-<label><span data-i18n="form.type">Tipo</span><select id="type"><option value="e" data-i18n="form.expense">Despesa</option><option value="i" data-i18n="form.income">Receita</option><option value="t" data-i18n="form.transfer">Transferência</option></select></label>
+<label><span data-i18n="form.type">Tipo</span><select id="type"><option value="e" data-i18n="form.expense">Despesa</option><option value="b" data-i18n="form.moneyBack">Dinheiro de volta</option><option value="i" data-i18n="form.income">Receita</option><option value="t" data-i18n="form.transfer">Transferência</option></select></label>
 <label id="accL" hidden><span data-i18n="form.account">Conta</span><select id="acc"></select></label>
 <label id="toL" hidden><span data-i18n="form.toAccount">Para a conta</span><select id="toAcc"></select></label>
 <label><span data-i18n="form.date">Data</span><span class="datefield"><input id="date" inputmode="numeric" autocomplete="off" required placeholder="dd/mm/aaaa" data-i18n-placeholder="form.datePlaceholder"><button type="button" class="calbtn" id="dateBtn" aria-label="Escolher no calendário" data-i18n-aria-label="form.pickDate" title="Escolher no calendário" data-i18n-title="form.pickDate"></button><input type="date" id="datePick" tabindex="-1" aria-hidden="true"></span></label>
@@ -76,8 +76,9 @@
 <label id="catL"><span data-i18n="form.category">Categoria</span><select id="cat"></select></label>
 <label id="subL"><span data-i18n="form.subcategory">Subcategoria</span><select id="subcat"></select></label>
 <label><span data-i18n="form.tags">Etiquetas / notas</span><input id="tags" placeholder="férias, partilhado" data-i18n-placeholder="form.tagsPlaceholder"></label>
+<label id="reimbL" class="check"><input type="checkbox" id="reimb"><span data-i18n="form.reimbursable">Reembolsável</span></label>
 <button type="button" class="pr" id="sub" data-i18n="form.add">Adicionar</button><button type="button" id="cancel" hidden data-i18n="form.cancelEdit">Cancelar edição</button>
-</div><div class="chips" id="chips"></div></section>
+</div><div id="settleBox" class="settle" hidden><div class="mute" data-i18n="form.settles">Liquida estas compras reembolsáveis:</div><div id="settleList"></div></div><div class="chips" id="chips"></div></section>
 <section class="card" id="ov" hidden><h2 data-i18n="ov.title">Onde está o dinheiro</h2><div id="ovBody"></div></section>
 
 <div class="tabs"><div class="seg" id="modes"><button data-m="day" data-i18n="period.day">Dia</button><button data-m="month" class="on" data-i18n="period.month">Mês</button><button data-m="year" data-i18n="period.year">Ano</button></div>

@@ -327,4 +327,12 @@ export const es: Record<MessageKey, string> = {
   'acc.blocked.last': 'Necesita al menos una cuenta abierta.',
   'acc.blocked.transfers': 'Esta cuenta tiene transferencias desde o hacia otras cuentas. Archívela en lugar de eliminarla.',
   'acc.confirmDelete': '¿Eliminar la cuenta "{name}"? Sus movimientos dejan de contar en saldos e informes. Puede restaurarla más tarde.',
+  'form.moneyBack': 'Dinero devuelto',
+  'form.reimbursable': 'Reembolsable (alguien se lo devolverá)',
+  'form.settles': 'Este dinero devuelve estas compras reembolsables:',
+  'form.settleTooMuch': 'Las partes suman más que el importe recibido.',
+  'form.share': 'Parte',
+  'list.owed': 'pendiente {amount}',
+  'list.settled': 'reembolsada',
+  'ov.owed': 'pendiente de reembolso',
 };

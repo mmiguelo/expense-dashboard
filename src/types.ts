@@ -37,6 +37,13 @@ export interface Transaction {
 
 export type NewTransaction = Omit<Transaction, 'id'>;
 
+/** Money back (`repayment`, a negative expense) settling `amount` of a purchase. */
+export interface TransactionLink {
+  repayment: string;
+  purchase: string;
+  amount: number;
+}
+
 export interface RecurringExpense {
   id: string;
   desc: string;
@@ -139,4 +146,6 @@ export interface Snapshot {
   rules?: KeywordRule[];
   /** Money accounts; absent in backups from before them. */
   accounts?: Account[];
+  /** What money back settled; absent in backups from before reimbursements. */
+  links?: TransactionLink[];
 }

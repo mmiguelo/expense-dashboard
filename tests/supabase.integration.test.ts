@@ -109,9 +109,12 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
       await r.saveAccount(savings);
       const move = tx({ type: 't', cat: '', amount: 500, acc: main!.id, to: savings.id, toAmt: 500, desc: 'To savings' });
       const back = tx({ amount: -20, acc: main!.id, desc: 'Refund' });
+      const trip = tx({ amount: 20, acc: main!.id, desc: 'Trip', reimb: 1 });
       await r.saveTransaction(move);
+      await r.saveTransaction(trip);
       await r.saveTransaction(back);
-      expect(await r.listTransactions()).toEqual([move, back]);
+      await r.setLinks(back.id, [{ purchase: trip.id, amount: 20 }]);
+      expect(await r.listTransactions()).toEqual([move, trip, back]);
 
       const other = repoOf(await signUp('accounts-import'));
       await other.importSnapshot(await r.exportSnapshot(), { replace: true });
@@ -121,10 +124,13 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
         ['Poupança', 'savings', 'Bank B'],
       ]);
       const [m, sv] = accounts;
-      expect((await other.listTransactions()).map((x) => [x.desc, x.type, x.amount, x.acc, x.to])).toEqual([
+      const imported = await other.listTransactions();
+      expect(imported.map((x) => [x.desc, x.type, x.amount, x.acc, x.to])).toEqual([
         ['To savings', 't', 500, m!.id, sv!.id],
+        ['Trip', 'e', 20, m!.id, undefined],
         ['Refund', 'e', -20, m!.id, undefined],
       ]);
+      expect(await other.listLinks()).toEqual([{ repayment: imported[2]!.id, purchase: imported[1]!.id, amount: 20 }]);
     });
 
     it('has subcategories: defaults, add, delete, and on transactions and recurring expenses', async () => {

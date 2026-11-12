@@ -16,6 +16,7 @@ import type {
   Snapshot,
   Subcategories,
   Transaction,
+  TransactionLink,
 } from '../types';
 import type { ImportResult, Repository } from './repository';
 
@@ -208,6 +209,7 @@ export interface ImportPayload {
   recurring?: { source_id: string; description: string; amount: number; category: string; subcategory: string; day: number; start_month: string }[];
   occurrences?: { recurring_source_id: string; month: string }[];
   accounts?: (Omit<AccountRow, 'id'> & { source_id: string })[];
+  links?: { repayment: string; purchase: string; amount: number }[];
   transactions?: (Omit<TransactionRow, 'id' | 'account_id' | 'to_account_id'> & { source_id: string; account: string; to_account: string })[];
 }
 
@@ -311,6 +313,10 @@ export function toImportPayload(data: Partial<Snapshot>): ImportPayload {
       };
     });
   }
+  if (data.links)
+    p.links = data.links
+      .filter((l) => l && l.repayment && l.purchase && isAmount(l.amount))
+      .map((l) => ({ repayment: String(l.repayment), purchase: String(l.purchase), amount: l.amount }));
   return p;
 }
 
@@ -376,6 +382,17 @@ export class SupabaseRepository implements Repository {
 
   async deleteTransaction(id: string): Promise<void> {
     check(await this.db.from('transactions').delete().eq('id', id));
+  }
+
+  async listLinks(): Promise<TransactionLink[]> {
+    const rows = await this.all<{ repayment_id: string; purchase_id: string; amount: number }>((from, to) =>
+      this.db.from('transaction_links').select('repayment_id, purchase_id, amount').order('created_at').order('purchase_id').range(from, to),
+    );
+    return rows.map((r) => ({ repayment: r.repayment_id, purchase: r.purchase_id, amount: Number(r.amount) }));
+  }
+
+  async setLinks(repayment: string, items: { purchase: string; amount: number }[]): Promise<void> {
+    check(await this.db.rpc('set_transaction_links', { repayment, items: items.map((i) => ({ purchase_id: i.purchase, amount: i.amount })) }));
   }
 
   async listRecurring(): Promise<RecurringExpense[]> {
@@ -494,7 +511,8 @@ export class SupabaseRepository implements Repository {
   }
 
   async exportSnapshot(): Promise<Snapshot> {
-    const [accounts, ex, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
+    const [links, accounts, ex, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
+      this.listLinks(),
       this.listAccounts(),
       this.listTransactions(),
       this.listRecurring(),
@@ -505,7 +523,7 @@ export class SupabaseRepository implements Repository {
       this.getGeneratedMonths(),
       this.listKeywordRules(),
     ]);
-    return { accounts, ex, rec, bud, cats, subs, learn, gen, rules: rules.map(({ keyword, category }) => ({ keyword, category })) };
+    return { links, accounts, ex, rec, bud, cats, subs, learn, gen, rules: rules.map(({ keyword, category }) => ({ keyword, category })) };
   }
 
   async importSnapshot(data: Partial<Snapshot>, { replace }: { replace: boolean }): Promise<ImportResult> {

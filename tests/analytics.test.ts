@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   accountBalance,
+  allocate,
   accountDeleteBlocker,
   categoryRows,
   frequentExpenses,
   heatmapDays,
+  outstandingPurchases,
   overview,
+  owedToYou,
   percentChange,
   periodSpan,
   projectedTotal,
@@ -379,5 +382,38 @@ describe('account balances', () => {
     const accounts = [acc('a', 'checking'), acc('b', 'checking', 0, '2026-01-01', { deletedAt: '2026-03-01T00:00:00Z' })];
     const txs = [on('a', '2026-03-01', 5), on('b', '2026-03-01', 7)];
     expect(visibleTransactions(txs, accounts).map((x) => x.amount)).toEqual([5]);
+  });
+});
+
+describe('reimbursements', () => {
+  const purchase = (id: string, date: string, amount: number) => ({ ...tx(date, amount, { reimb: 1 as const }), id });
+  const back = (id: string, amount: number) => ({ ...tx('2026-03-20', -amount), id });
+
+  it('a work trip paid with the meal card and paid back into the current account nets to zero spending', () => {
+    const meal = purchase('p1', '2026-03-05', 20);
+    const repaid = { ...back('r1', 20), acc: 'main' };
+    const txs = [{ ...meal, acc: 'meal' }, repaid];
+    expect(summarize(txs, '2026-03-01', 'month', '2026-03-31').total).toBe(0);
+    expect(owedToYou(txs, [{ repayment: 'r1', purchase: 'p1', amount: 20 }])).toBe(0);
+    expect(owedToYou(txs, [])).toBe(20);
+  });
+
+  it('one repayment can settle several purchases, partly', () => {
+    const txs = [purchase('a', '2026-03-01', 100), purchase('b', '2026-03-02', 50), back('r', 120)];
+    const links = [
+      { repayment: 'r', purchase: 'a', amount: 100 },
+      { repayment: 'r', purchase: 'b', amount: 20 },
+    ];
+    expect(outstandingPurchases(txs, links).map((o) => [o.purchase.id, o.remaining])).toEqual([['b', 30]]);
+    expect(owedToYou(txs, links)).toBe(30);
+    // While editing the repayment, its own shares are free to choose again.
+    expect(outstandingPurchases(txs, links, 'r').map((o) => o.remaining)).toEqual([100, 50]);
+  });
+
+  it('ignores deleted repayments and splits money back oldest first', () => {
+    const txs = [purchase('a', '2026-03-01', 10), { ...back('r', 10), del: '2026-03-21T00:00:00Z' }];
+    expect(owedToYou(txs, [{ repayment: 'r', purchase: 'a', amount: 10 }])).toBe(10);
+    expect(allocate(120, [100, 50])).toEqual([100, 20]);
+    expect(allocate(30.3, [10.1, 10.1, 50])).toEqual([10.1, 10.1, 10.1]);
   });
 });

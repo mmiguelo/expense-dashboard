@@ -415,6 +415,43 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     expect((await (await accountRepo(email)).listAccounts()).find((a) => a.id === id)!.deletedAt).toBeUndefined();
   });
 
+  it('reimbursements: a reimbursable purchase is owed until money back pays it', async () => {
+    const email = newEmail();
+    await openPage();
+    await signUpThroughForm(email);
+    type('desc', 'Jantar em viagem');
+    $<HTMLSelectElement>('cat').value = 'Lazer';
+    $('cat').dispatchEvent(new Event('change'));
+    type('amt', '20');
+    $<HTMLInputElement>('reimb').checked = true;
+    $('sub').click();
+    await until(() => $('list').textContent!.includes('falta receber'), 'purchase owed');
+    expect($('ovBody').textContent).toContain('a receber de reembolsos');
+
+    $<HTMLSelectElement>('type').value = 'b';
+    $('type').dispatchEvent(new Event('change'));
+    expect($('settleBox').hidden).toBe(false);
+    expect($('reimbL').hidden).toBe(true);
+    type('amt', '20');
+    const box = document.querySelector<HTMLInputElement>('[data-settle]')!;
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    expect($<HTMLSelectElement>('cat').value).toBe('Lazer');
+    expect(document.querySelector<HTMLInputElement>('[data-share]')!.value).toBe('20');
+    $('sub').click();
+    await until(() => $('list').textContent!.includes('reembolsada'), 'purchase paid back');
+    expect($('ovBody').textContent).not.toContain('a receber de reembolsos');
+    expect($('sum').textContent).toContain('0,00');
+
+    const repo = await accountRepo(email);
+    const txs = await repo.listTransactions();
+    expect(txs.map((x) => [x.desc, x.amount, !!x.reimb])).toEqual([
+      ['Jantar em viagem', 20, true],
+      ['Jantar em viagem', -20, false],
+    ]);
+    expect(await repo.listLinks()).toEqual([{ repayment: txs[1]!.id, purchase: txs[0]!.id, amount: 20 }]);
+  });
+
   it('settings: sections collapse to their heading, remembered on reload', async () => {
     await openPage();
     await signUpThroughForm(newEmail());

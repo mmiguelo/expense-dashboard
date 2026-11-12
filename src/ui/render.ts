@@ -1,9 +1,10 @@
 import type { AccountBalance, CategoryRow, Change, HeatmapDay, Merchant, Overview, PeriodSummary, QuickPick, TrendBar } from '../analytics';
 import { categoryColor, expenseCategoryNames, INCOME_CATEGORY } from '../categories';
 import { formatDmy, parseIsoDate } from '../dates';
-import { escapeHtml as esc, formatEur as eur } from '../format';
+import { amountToInput, escapeHtml as esc, formatEur as eur } from '../format';
 import { monthNames, t, tn } from '../i18n';
 import type { Account, Budgets, Categories, KeywordRule, Mode, RecurringExpense, Subcategories, Transaction } from '../types';
+import type { Outstanding } from '../analytics';
 
 // Pure HTML builders. Dashboard markup is kept identical to the original single-file app.
 
@@ -44,7 +45,7 @@ export function summaryHtml(s: PeriodSummary, mode: Mode, vsPrevious: Change | n
     ? t(`sum.vsPrevious.${mode}`, { change: change(vsPrevious), amount: eur(s.previousTotal) })
     : t(`sum.noPrevious.${mode}`);
   return `<div class="mute">${t(`sum.spent.${mode}`)}</div><div class="total">${eur(s.total)}</div><div class="mute">${previous}</div>
- <div class="stats"><div><b>${s.expenses.length}</b><small>${t('sum.expenses')}</small></div>${mode !== 'day' ? `<div><b>${eur(s.average)}</b><small>${t(mode === 'year' ? 'sum.avgPerMonth' : 'sum.avgPerDay')}</small></div>` : ''}
+ <div class="stats"><div><b>${s.expenses.filter((x) => x.amount > 0).length}</b><small>${t('sum.expenses')}</small></div>${mode !== 'day' ? `<div><b>${eur(s.average)}</b><small>${t(mode === 'year' ? 'sum.avgPerMonth' : 'sum.avgPerDay')}</small></div>` : ''}
  ${s.projected !== null ? `<div><b>${eur(s.projected)}</b><small>${t(mode === 'year' ? 'sum.projectedYear' : 'sum.projectedMonth')}</small></div>` : ''}
  <div><b>${eur(s.income)}</b><small>${t('sum.income')}</small></div>${s.saved ? `<div><b>${eur(s.saved)}</b><small>${t('sum.saved')}</small></div>` : ''}<div><b class="${s.net < 0 ? 'up' : ''}">${eur(s.net)}</b><small>${t('sum.net')}</small></div>${s.savingsRate !== null ? `<div><b>${s.savingsRate}%</b><small>${t('sum.savingsRate')}</small></div>` : ''}
  <div><b>${s.fixedShare}%</b><small>${t('sum.fixed', { amount: eur(s.fixed) })}</small></div><div><b>${eur(s.variable)}</b><small>${t('sum.variable')}</small></div></div>`;
@@ -63,7 +64,9 @@ export function trendHtml(bars: TrendBar[], cats: Categories): string {
 }
 
 export function donutHtml(s: PeriodSummary, cats: Categories): string {
-  const { categories: ents, total } = s;
+  // Shares of spending: a category that money back made negative has no slice.
+  const ents = s.categories.filter(([, v]) => v > 0);
+  const total = ents.reduce((a, [, v]) => a + v, 0);
   if (!ents.length) return `<div class="mute">${t('donut.empty')}</div>`;
   let off = 0;
   const arcs = ents
@@ -111,16 +114,24 @@ const TRANSFER_COLOR = '#8a8478';
  * Transactions, newest first. With more than one account, each says which account it
  * was on; transfers show "From → To" instead of a category.
  */
-export function transactionListHtml(txs: Transaction[], cats: Categories, accounts: Account[] = []): string {
+export function transactionListHtml(
+  txs: Transaction[],
+  cats: Categories,
+  accounts: Account[] = [],
+  /** Reimbursable purchases still owed, by id; one missing from here is paid back. */
+  owed: Record<string, number> = {},
+): string {
   if (!txs.length) return `<div class="mute">${t('list.empty')}</div>`;
   const name = (id?: string) => esc(accounts.find((a) => a.id === id)?.name ?? '');
   const several = accounts.filter((a) => !a.deletedAt).length > 1;
   return txs
     .map((x) => {
       const transfer = x.type === 't';
-      const where = transfer ? `${name(x.acc)} → ${name(x.to)}` : categoryLabel(x.cat, x.sub) + (several ? ` · ${name(x.acc)}` : '');
-      const sign = x.type === 'i' ? '+' : transfer ? '→ ' : '';
-      return `<div class="row"><span class="dot" style="background:${transfer ? TRANSFER_COLOR : categoryColor(x.cat, cats)}"></span><div>${esc(x.desc)}<div class="mute">${formatDmy(x.date)}, ${where}${x.tags ? ', ' + esc(x.tags) : ''}</div></div><div><b>${sign}${eur(x.amount)}</b> <button class="x" data-edit="${x.id}" aria-label="${esc(t('common.edit'))}">✎</button><button class="x" data-del="${x.id}" aria-label="${esc(t('common.delete'))}">✕</button></div></div>`;
+      const back = x.type === 'e' && x.amount < 0;
+      const reimb = x.reimb ? ` · ${x.id in owed ? t('list.owed', { amount: eur(owed[x.id]!) }) : t('list.settled')}` : '';
+      const where = transfer ? `${name(x.acc)} → ${name(x.to)}` : categoryLabel(x.cat, x.sub) + (several ? ` · ${name(x.acc)}` : '') + reimb;
+      const sign = x.type === 'i' ? '+' : transfer ? '→ ' : back ? '↩ +' : '';
+      return `<div class="row"><span class="dot" style="background:${transfer ? TRANSFER_COLOR : categoryColor(x.cat, cats)}"></span><div>${esc(x.desc)}<div class="mute">${formatDmy(x.date)}, ${where}${x.tags ? ', ' + esc(x.tags) : ''}</div></div><div><b>${sign}${eur(Math.abs(x.amount))}</b> <button class="x" data-edit="${x.id}" aria-label="${esc(t('common.edit'))}">✎</button><button class="x" data-del="${x.id}" aria-label="${esc(t('common.delete'))}">✕</button></div></div>`;
     })
     .join('');
 }
@@ -159,7 +170,7 @@ const accountMeta = (a: Account): string =>
  * more than one kind), then one row per account (only when there is more than one).
  * Rows filter the dashboard to that account; `filter` is the one shown, if any.
  */
-export function overviewHtml(o: Overview, filter: string | null): string {
+export function overviewHtml(o: Overview, filter: string | null, owed = 0): string {
   const kinds = Object.values(o.has).filter(Boolean).length;
   const tiles: [boolean, number, 'ov.available' | 'ov.restricted' | 'ov.savings' | 'ov.creditDebt'][] = [
     [o.has.checking, o.available, 'ov.available'],
@@ -167,8 +178,12 @@ export function overviewHtml(o: Overview, filter: string | null): string {
     [o.has.savings, o.savings, 'ov.savings'],
     [o.has.credit, o.creditDebt, 'ov.creditDebt'],
   ];
-  const stats = kinds > 1
-    ? `<div class="stats">${tiles.filter(([shown]) => shown).map(([, n, key]) => `<div><b class="${n < 0 ? 'up' : ''}">${eur(n)}</b><small>${t(key)}</small></div>`).join('')}</div>`
+  const shown: [number, string][] = [
+    ...(kinds > 1 ? tiles.filter(([on]) => on).map(([, n, key]) => [n, t(key)] as [number, string]) : []),
+    ...(owed > 0 ? [[owed, t('ov.owed')] as [number, string]] : []),
+  ];
+  const stats = shown.length
+    ? `<div class="stats">${shown.map(([n, label]) => `<div><b class="${n < 0 ? 'up' : ''}">${eur(n)}</b><small>${label}</small></div>`).join('')}</div>`
     : '';
   const rows = o.balances.length > 1
     ? `<div class="acclist">${o.balances.map((b) => accountRowHtml(b, b.account.id === filter)).join('')}</div>` +
@@ -202,6 +217,15 @@ export const deletedAccountsHtml = (accounts: Account[]): string =>
         )
         .join('')
     : '';
+
+/** Purchases money back can pay back, each with a share box; `shares` are the chosen ones. */
+export const settleRowsHtml = (outstanding: Outstanding[], shares: Record<string, number>): string =>
+  outstanding
+    .map(
+      ({ purchase: x, remaining }) =>
+        `<label class="srow"><input type="checkbox" data-settle="${x.id}"${x.id in shares ? ' checked' : ''}><span>${esc(x.desc)} <span class="mute">${formatDmy(x.date)}, ${categoryLabel(x.cat, x.sub)}</span></span><span class="mute">${t('list.owed', { amount: eur(remaining) })}</span><input data-share="${x.id}" inputmode="decimal" aria-label="${esc(t('form.share'))}" value="${x.id in shares ? amountToInput(shares[x.id]!) : ''}"${x.id in shares ? '' : ' disabled'}></label>`,
+    )
+    .join('');
 
 // ---- Settings ----
 

@@ -1,6 +1,6 @@
 import { daysInMonth, inPeriod, pad, parseIsoDate, shiftRef, toIsoDate } from './dates';
 import { monthNames } from './i18n';
-import type { Account, Budgets, Mode, Transaction } from './types';
+import type { Account, Budgets, Mode, Transaction, TransactionLink } from './types';
 
 // All functions are pure. `ref` is the selected date (YYYY-MM-DD) and `today` the
 // current local date; together with `mode` they define the period being looked at.
@@ -209,6 +209,44 @@ export function accountDeleteBlocker(account: Account, accounts: Account[], txs:
   return null;
 }
 
+export interface Outstanding {
+  purchase: Transaction;
+  /** Still to be paid back. */
+  remaining: number;
+}
+
+/**
+ * Reimbursable purchases not yet fully paid back, oldest first. Links of `ignoring` (money
+ * back being edited) don't count, so its shares can be chosen again.
+ */
+export function outstandingPurchases(txs: Transaction[], links: TransactionLink[], ignoring?: string): Outstanding[] {
+  const live = new Set(txs.filter((x) => !x.del).map((x) => x.id));
+  const settled: Record<string, number> = {};
+  for (const l of links) if (l.repayment !== ignoring && live.has(l.repayment)) settled[l.purchase] = (settled[l.purchase] ?? 0) + l.amount;
+  return txs
+    .filter((x) => x.reimb && !x.del && x.type === 'e' && x.amount > 0)
+    .map((purchase) => ({ purchase, remaining: Math.round((purchase.amount - (settled[purchase.id] ?? 0)) * 100) / 100 }))
+    .filter((o) => o.remaining > 0)
+    .sort((a, b) => a.purchase.date.localeCompare(b.purchase.date));
+}
+
+/** What others still owe you for reimbursable purchases. */
+export const owedToYou = (txs: Transaction[], links: TransactionLink[]): number =>
+  Math.round(outstandingPurchases(txs, links).reduce((s, o) => s + o.remaining, 0) * 100) / 100;
+
+/**
+ * Share `amount` of money back among purchases in order, each up to what it still owes:
+ * the default split, which the user can change.
+ */
+export function allocate(amount: number, remaining: number[]): number[] {
+  let left = Math.round(amount * 100);
+  return remaining.map((r) => {
+    const share = Math.min(left, Math.round(r * 100));
+    left -= share;
+    return share / 100;
+  });
+}
+
 export interface TrendBar {
   /** Axis label; empty for unlabelled bars. */
   label: string;
@@ -240,7 +278,8 @@ export function trendBars(expenses: Transaction[], ref: string, mode: Mode): Tre
     }
   }
   return buckets.map(([label, match]) => {
-    const byCategory = totalsByCategory(expenses.filter(match));
+    // Money back can make a category negative for a bar; bars only show spending.
+    const byCategory = Object.fromEntries(Object.entries(totalsByCategory(expenses.filter(match))).filter(([, v]) => v > 0));
     return { label, byCategory, total: Object.values(byCategory).reduce((a, b) => a + b, 0) };
   });
 }
@@ -258,7 +297,7 @@ export function heatmapDays(periodExpenses: Transaction[], ref: string, mode: Mo
   const days: HeatmapDay[] = [];
   for (let i = 0; i < n; i++) {
     const date = toIsoDate(mode === 'month' ? new Date(y, m - 1, i + 1, 12) : new Date(y, 0, i + 1, 12));
-    days.push({ date, total: sumAmounts(periodExpenses.filter((x) => x.date === date)) });
+    days.push({ date, total: Math.max(0, sumAmounts(periodExpenses.filter((x) => x.date === date))) });
   }
   return days;
 }
@@ -279,6 +318,7 @@ export function topMerchants(periodExpenses: Transaction[], limit = 5): Merchant
     mm[k].count++;
   });
   return Object.values(mm)
+    .filter((m) => m.total > 0)
     .sort((a, b) => b.total - a.total)
     .slice(0, limit);
 }
@@ -294,7 +334,7 @@ export interface QuickPick {
 /** Most frequent expense descriptions, for one-tap entry. */
 export function frequentExpenses(expenses: Transaction[], limit = 6): QuickPick[] {
   const f: Record<string, QuickPick & { n: number }> = {};
-  expenses.forEach((x) => {
+  expenses.filter((x) => x.amount > 0).forEach((x) => {
     const k = x.desc.toLowerCase();
     f[k] = f[k] || { n: 0, desc: x.desc, cat: x.cat, sub: x.sub, amount: x.amount };
     f[k].n++;

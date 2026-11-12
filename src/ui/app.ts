@@ -5,6 +5,8 @@ import {
   frequentExpenses,
   heatmapDays,
   onAccount,
+  outstandingPurchases,
+  owedToYou,
   overview,
   percentChange,
   searchTransactions,
@@ -12,6 +14,7 @@ import {
   topMerchants,
   trendBars,
   visibleTransactions,
+  allocate,
 } from '../analytics';
 import { toCsv, parseBackup } from '../backup';
 import { expenseCategoryNames, guessCategory, fixedCategoryOf, guessSubcategory, isIncomeCategory, missingCategories, nextCategoryColor } from '../categories';
@@ -32,6 +35,7 @@ import type {
   RecurringExpense,
   Subcategories,
   Transaction,
+  TransactionLink,
   TxType,
 } from '../types';
 import * as html from './render';
@@ -57,6 +61,7 @@ interface Data {
   currency: string;
   accounts: Account[];
   txs: Transaction[];
+  links: TransactionLink[];
   rec: RecurringExpense[];
   bud: Budgets;
   cats: Categories;
@@ -79,7 +84,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   const formDate = () => parseDmy($('date').value);
   const newId = () => crypto.randomUUID();
 
-  let data: Data = { currency: 'EUR', accounts: [], txs: [], rec: [], bud: {}, cats: {}, subs: {}, learn: {}, gen: {}, rules: [] };
+  let data: Data = { currency: 'EUR', accounts: [], txs: [], links: [], rec: [], bud: {}, cats: {}, subs: {}, learn: {}, gen: {}, rules: [] };
   let mode: Mode = 'month';
   let ref = today();
   /** The user picked a category by hand, so stop auto-guessing it. */
@@ -97,10 +102,11 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   let deleting: string | null = null;
 
   async function load(): Promise<void> {
-    const [profile, accounts, txs, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
+    const [profile, accounts, txs, links, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
       repo.getProfile(),
       repo.listAccounts(),
       repo.listTransactions(),
+      repo.listLinks(),
       repo.listRecurring(),
       repo.getBudgets(),
       repo.getCategories(),
@@ -114,7 +120,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       onDeactivated?.();
       throw new Error(t('err.deactivated'));
     }
-    data = { currency: profile.currency, accounts, txs, rec, bud, cats, subs, learn, gen, rules };
+    data = { currency: profile.currency, accounts, txs, links, rec, bud, cats, subs, learn, gen, rules };
   }
 
   async function generateDueRecurring(): Promise<void> {
@@ -193,11 +199,57 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   }
 
   /** Transfers have a To account and no category. */
+  /**
+   * The form's Type: the transaction types, plus 'b' (money back), which is saved as an
+   * expense with a negative amount.
+   */
+  const formType = () => sel('type').value as TxType | 'b';
+  const savedType = (): TxType => (formType() === 'b' ? 'e' : (formType() as TxType));
+
+  /** Transfers have a To account and no category; expenses can be reimbursable; money back settles purchases. */
   function applyTypeFields(): void {
-    const transfer = sel('type').value === 't';
-    $('toL').hidden = !transfer;
-    $('catL').hidden = $('subL').hidden = transfer;
+    const type = formType();
+    $('toL').hidden = type !== 't';
+    $('catL').hidden = $('subL').hidden = type === 't';
+    $('reimbL').hidden = type !== 'e';
+    fillSettle();
   }
+
+  /** Shares of the money back being entered, by purchase id. */
+  let shares: Record<string, number> = {};
+
+  /** Purchases the money back can pay back: those still owed, plus those it already settles. */
+  function fillSettle(): void {
+    const outstanding = formType() === 'b' ? outstandingPurchases(visibleTransactions(data.txs, data.accounts), data.links, editId ?? undefined) : [];
+    for (const id of Object.keys(shares)) if (!outstanding.some((o) => o.purchase.id === id)) delete shares[id];
+    $('settleBox').hidden = !outstanding.length;
+    $('settleList').innerHTML = html.settleRowsHtml(outstanding, shares);
+  }
+
+  $('settleList').addEventListener('change', (e) => {
+    const el = e.target as HTMLInputElement;
+    const id = el.dataset.settle ?? el.dataset.share;
+    if (!id) return;
+    if (el.dataset.share) {
+      const v = parseAmount(el.value);
+      shares[id] = Number.isFinite(v) && v > 0 ? Math.round(v * 100) / 100 : 0;
+      return;
+    }
+    if (el.checked) {
+      const outstanding = outstandingPurchases(visibleTransactions(data.txs, data.accounts), data.links, editId ?? undefined);
+      const purchase = outstanding.find((o) => o.purchase.id === id)!;
+      const typed = parseAmount($('amt').value);
+      const left = (Number.isFinite(typed) ? typed : purchase.remaining) - Object.values(shares).reduce((a, b) => a + b, 0);
+      shares[id] = allocate(Math.max(left, 0), [purchase.remaining])[0] || purchase.remaining;
+      // Money back goes in the purchase's category, unless one was picked.
+      if (!touched && Object.keys(shares).length === 1) {
+        fillFormCategories(purchase.purchase.cat);
+        fillSubs('subcat', sel('cat').value, purchase.purchase.sub || '');
+        if (!$('desc').value.trim()) $('desc').value = purchase.purchase.desc;
+      }
+    } else delete shares[id];
+    fillSettle();
+  });
 
   function fillSelects(): void {
     const selects = [sel('fc'), sel('rc'), sel('kwNewCat')];
@@ -221,7 +273,8 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
 
   function renderList(): void {
     const list = searchTransactions(shownTransactions(), ref, mode, $('q').value, sel('fc').value);
-    $('list').innerHTML = html.transactionListHtml(list, data.cats, data.accounts);
+    const owed = Object.fromEntries(outstandingPurchases(data.txs, data.links).map((o) => [o.purchase.id, o.remaining]));
+    $('list').innerHTML = html.transactionListHtml(list, data.cats, data.accounts, owed);
   }
 
   function renderSettings(): void {
@@ -257,7 +310,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     const o = overview(data.accounts, data.txs);
     if (accountFilter && !o.balances.some((b) => b.account.id === accountFilter)) accountFilter = null;
     $('ov').hidden = false;
-    $('ovBody').innerHTML = html.overviewHtml(o, accountFilter);
+    $('ovBody').innerHTML = html.overviewHtml(o, accountFilter, owedToYou(visibleTransactions(data.txs, data.accounts), data.links));
     const txs = shownTransactions();
     const s = summarize(txs, ref, mode, today(), data.accounts);
     $('lbl').textContent = html.periodLabel(ref, mode);
@@ -282,6 +335,8 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     subTouched = false;
     ['amt', 'desc', 'tags'].forEach((i) => ($(i).value = ''));
     sel('type').value = 'e';
+    $<HTMLInputElement>('reimb').checked = false;
+    shares = {};
     setFormDate(ref);
     fillFormCategories();
     fillAccounts('', '');
@@ -300,7 +355,10 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       return;
     }
     if (!(amount > 0)) return;
-    const type = sel('type').value as TxType;
+    const back = formType() === 'b';
+    const type = savedType();
+    const settles = back ? Object.entries(shares).filter(([, a]) => a > 0).map(([purchase, a]) => ({ purchase, amount: a })) : [];
+    if (settles.reduce((s, l) => s + l.amount, 0) > amount + 0.001) return toast(t('form.settleTooMuch'));
     const desc = $('desc').value.trim();
     const acc = sel('acc').value;
     const transfer = type === 't';
@@ -313,21 +371,24 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     const cat = transfer ? '' : (fixedCategoryOf(type) ?? sel('cat').value);
     const sub = transfer ? '' : sel('subcat').value;
     const toName = data.accounts.find((a) => a.id === to)?.name ?? '';
-    const fields = { date, amount, desc: desc || sub || cat || toName, cat, sub, type, tags: $('tags').value.trim(), acc };
+    const fields = { date, amount: back ? -amount : amount, desc: desc || sub || cat || toName, cat, sub, type, tags: $('tags').value.trim(), acc };
     let tx: Transaction;
     if (editId !== null) {
       const existing = data.txs.find((z) => z.id === editId);
       if (!existing) return;
-      const { to: _to, toAmt: _toAmt, ...rest } = existing;
+      const { to: _to, toAmt: _toAmt, reimb: _reimb, ...rest } = existing;
       tx = { ...rest, ...fields };
     } else tx = { id: newId(), ...fields };
     if (transfer) Object.assign(tx, { to, toAmt: amount });
-    const learn = type === 'e' && desc && touched;
+    if (formType() === 'e' && $<HTMLInputElement>('reimb').checked) tx.reimb = 1;
+    const hadLinks = data.links.some((l) => l.repayment === tx.id);
+    const learn = formType() === 'e' && desc && touched;
     // On failure the form keeps what was typed, so it can be submitted again.
     await update(
       async () => {
         if (learn) await repo.learnCategory(desc, cat);
         await repo.saveTransaction(tx);
+        if (settles.length || hadLinks) await repo.setLinks(tx.id, settles);
         saveLastAccount(acc);
       },
       () => {
@@ -340,9 +401,12 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
 
   function startEdit(x: Transaction): void {
     editId = x.id;
-    sel('type').value = x.type;
+    const back = x.type === 'e' && x.amount < 0;
+    sel('type').value = back ? 'b' : x.type;
     setFormDate(x.date);
-    $('amt').value = amountToInput(x.amount);
+    $('amt').value = amountToInput(Math.abs(x.amount));
+    $<HTMLInputElement>('reimb').checked = !!x.reimb;
+    shares = Object.fromEntries(data.links.filter((l) => l.repayment === x.id).map((l) => [l.purchase, l.amount]));
     $('desc').value = x.desc;
     $('tags').value = x.tags || '';
     fillFormCategories(x.cat);

@@ -336,6 +336,14 @@ export const pt = {
   'acc.blocked.last': 'Precisa de pelo menos uma conta aberta.',
   'acc.blocked.transfers': 'Esta conta tem transferências de ou para outras contas. Arquive-a em vez de a eliminar.',
   'acc.confirmDelete': 'Eliminar a conta "{name}"? Os movimentos dela deixam de contar em saldos e relatórios. Pode restaurá-la mais tarde.',
+  'form.moneyBack': 'Dinheiro de volta',
+  'form.reimbursable': 'Reembolsável (alguém vai pagar-lhe)',
+  'form.settles': 'Este dinheiro paga estas compras reembolsáveis:',
+  'form.settleTooMuch': 'As partes somam mais do que o valor recebido.',
+  'form.share': 'Parte',
+  'list.owed': 'falta receber {amount}',
+  'list.settled': 'reembolsada',
+  'ov.owed': 'a receber de reembolsos',
 } as const;
 
 export type MessageKey = keyof typeof pt;
