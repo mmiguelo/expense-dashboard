@@ -84,7 +84,7 @@ export const es: Record<MessageKey, string> = {
 
   'settings.categories': 'Categorías',
   'settings.categoriesHelp':
-    'Cambiar el nombre o borrar una categoría actualiza sus movimientos, gastos fijos, reglas y presupuestos. Abra una categoría para añadir o quitar subcategorías. "Rendimentos" guarda sus ingresos y no se puede renombrar ni borrar.',
+    'Cambiar el nombre o borrar una categoría actualiza sus movimientos, gastos fijos, reglas y presupuestos. Abra una categoría para añadir o quitar subcategorías. Puede tener varias categorías de gastos y de ingresos; el tipo de una categoría no cambia una vez creada.',
   'settings.newCategory': 'Nueva categoría',
   'settings.newCategoryPlaceholder': 'p. ej.: Mascotas',
   'settings.colour': 'Color',
@@ -335,4 +335,8 @@ export const es: Record<MessageKey, string> = {
   'list.owed': 'pendiente {amount}',
   'list.settled': 'reembolsada',
   'ov.owed': 'pendiente de reembolso',
+  'cat.expenses': 'Gastos',
+  'cat.incomes': 'Ingresos',
+  'cat.kindLabel': 'Tipo',
+  'cat.lastOfKind': 'Es su última categoría de este tipo: no se puede eliminar.',
 };

@@ -65,7 +65,7 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
       cats
         .map(
           (c) =>
-            `<div class="erow" style="grid-template-columns:44px 1fr 80px auto auto"><input type="color" value="${esc(c.color)}" data-dc-color="${c.id}" aria-label="${esc(t('cat.colourOf', { name: c.name }))}"><input value="${esc(c.name)}" data-dc-name="${c.id}" maxlength="100" aria-label="${esc(t('common.name'))}"><input type="number" value="${c.sortOrder}" data-dc-order="${c.id}" aria-label="${esc(t('admin.sortOrderOf', { name: c.name }))}" title="${esc(t('admin.sortOrder'))}"><button type="button" data-dc-save="${c.id}">${t('common.save')}</button><button type="button" class="x" data-dc-delete="${c.id}" aria-label="${esc(t('cat.deleteNamed', { name: c.name }))}">✕</button></div>`,
+            `<div class="erow" style="grid-template-columns:44px 1fr 80px auto auto"><input type="color" value="${esc(c.color)}" data-dc-color="${c.id}" aria-label="${esc(t('cat.colourOf', { name: c.name }))}"><input value="${esc(c.name)}" data-dc-name="${c.id}" maxlength="100" aria-label="${esc(t('common.name'))}" title="${esc(t(c.kind === 'income' ? 'cat.incomes' : 'cat.expenses'))}"><input type="number" value="${c.sortOrder}" data-dc-order="${c.id}" aria-label="${esc(t('admin.sortOrderOf', { name: c.name }))}" title="${esc(t('admin.sortOrder'))}"><button type="button" data-dc-save="${c.id}">${t('common.save')}</button><button type="button" class="x" data-dc-delete="${c.id}" aria-label="${esc(t('cat.deleteNamed', { name: c.name }))}">✕</button></div>`,
         )
         .join('') || `<div class="mute">${t('admin.noDefaultCategories')}</div>`;
 
@@ -133,7 +133,7 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
     if (cats.some((c) => c.name === name)) return notify(t('admin.categoryExists', { name }));
     const sortOrder = Math.max(0, ...cats.map((c) => c.sortOrder)) + 10;
     $('dcName').value = '';
-    void run(() => repo.saveDefaultCategory({ name, color: $('dcColor').value, sortOrder }), t('admin.added', { name }));
+    void run(() => repo.saveDefaultCategory({ name, color: $('dcColor').value, sortOrder, kind: $<HTMLSelectElement>('dcKind').value as DefaultCategory['kind'] }), t('admin.added', { name }));
   });
 
   $('defCatList').addEventListener('click', (e) => {

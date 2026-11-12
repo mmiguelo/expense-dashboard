@@ -41,7 +41,7 @@ select throws_like(format($$insert into public.categories (user_id, name, color)
 -- ---- rename and delete categories ----
 insert into public.transactions (user_id, date, amount, type, category, description)
   values (:'bob', '2026-03-01', 5, 'expense', 'Alimentação', 'bob groceries'),
-         (:'bob', '2026-03-01', 7, 'income', 'Alimentação', 'odd income');
+         (:'bob', '2026-03-01', 7, 'income', 'Rendimentos', 'salary');
 insert into public.budgets (user_id, category, amount) values (:'bob', 'Alimentação', 300);
 insert into public.category_corrections (user_id, merchant, category) values (:'bob', 'lidl', 'Alimentação');
 insert into public.recurring_expenses (user_id, description, amount, category, day, start_month) values (:'bob', 'Box', 20, 'Alimentação', 1, '2026-01-01');
@@ -57,13 +57,15 @@ select results_eq($$select
     (select count(*) from public.recurring_expenses where category = 'Food')::int,
     (select count(*) from public.categories where name = 'Alimentação')::int$$,
   $$values (1, 1, true, 1, 1, 0)$$, 'renaming updates expenses, budget, rules, learned merchants and recurring expenses');
-select results_eq($$select category from public.transactions where description = 'odd income'$$, $$values ('Alimentação'::text)$$, 'income is left alone');
 select results_eq($$select count(*)::int from public.subcategories where category = 'Food'$$, array[4], 'its subcategories follow the new name');
 select throws_like($$select public.rename_category('Food', 'Transportes')$$, 'There is already a category%', 'renaming onto an existing name is refused');
-select throws_like($$select public.rename_category('Food', 'Income')$$, 'Choose another name%', '"Income" is reserved');
-select throws_like($$select public.rename_category('Food', 'Rendimentos')$$, 'Choose another name%', '"Rendimentos" is reserved');
-select throws_like($$select public.rename_category('Rendimentos', 'Salaries')$$, '%cannot be renamed%', 'income''s category cannot be renamed');
-select throws_like($$select public.delete_category('Rendimentos')$$, '%cannot be deleted%', 'income''s category cannot be deleted');
+select lives_ok($$select public.rename_category('Rendimentos', 'Salários')$$, 'income categories can be renamed');
+select results_eq($$select category from public.transactions where description = 'salary'$$, $$values ('Salários'::text)$$, 'and their income follows');
+select throws_like($$select public.delete_category('Salários')$$, '%last income category%', 'the last income category cannot be deleted');
+delete from public.categories where name = 'Extra 1';
+insert into public.categories (name, color, kind) values ('Extras', '#000000', 'income');
+select throws_like($$select public.delete_category('Extras', 'Lazer')$$, 'Choose another existing category%', 'income can only move to another income category');
+select throws_ok($$update public.categories set kind = 'expense' where name = 'Extras'$$, '23514', null, 'a category''s kind cannot change');
 update public.transactions set subcategory = 'Talho' where description = 'bob groceries';
 select throws_like($$select public.delete_category('Food')$$, '%still used by transactions%', 'deleting a used category needs a category to move things to');
 select lives_ok($$select public.delete_category('Food', 'Lazer')$$, 'deleting with a category to move things to works');

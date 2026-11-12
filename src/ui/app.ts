@@ -17,7 +17,7 @@ import {
   allocate,
 } from '../analytics';
 import { toCsv, parseBackup } from '../backup';
-import { expenseCategoryNames, guessCategory, fixedCategoryOf, guessSubcategory, isIncomeCategory, missingCategories, nextCategoryColor } from '../categories';
+import { categoryNamesOfKind, guessCategory, guessSubcategory, kindOf, missingCategories, nextCategoryColor } from '../categories';
 import { formatDmy, parseDmy, shiftRef, toIsoDate } from '../dates';
 import { amountToInput, parseAmount } from '../format';
 import { t, tn, translateError } from '../i18n';
@@ -28,6 +28,8 @@ import type {
   Account,
   Budgets,
   Categories,
+  CategoryKind,
+  CategoryKinds,
   GeneratedMonths,
   KeywordRule,
   LearnedCategories,
@@ -65,6 +67,7 @@ interface Data {
   rec: RecurringExpense[];
   bud: Budgets;
   cats: Categories;
+  kinds: CategoryKinds;
   subs: Subcategories;
   learn: LearnedCategories;
   gen: GeneratedMonths;
@@ -84,7 +87,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   const formDate = () => parseDmy($('date').value);
   const newId = () => crypto.randomUUID();
 
-  let data: Data = { currency: 'EUR', accounts: [], txs: [], links: [], rec: [], bud: {}, cats: {}, subs: {}, learn: {}, gen: {}, rules: [] };
+  let data: Data = { currency: 'EUR', accounts: [], txs: [], links: [], rec: [], bud: {}, cats: {}, kinds: {}, subs: {}, learn: {}, gen: {}, rules: [] };
   let mode: Mode = 'month';
   let ref = today();
   /** The user picked a category by hand, so stop auto-guessing it. */
@@ -102,7 +105,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   let deleting: string | null = null;
 
   async function load(): Promise<void> {
-    const [profile, accounts, txs, links, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
+    const [profile, accounts, txs, links, rec, bud, cats, kinds, subs, learn, gen, rules] = await Promise.all([
       repo.getProfile(),
       repo.listAccounts(),
       repo.listTransactions(),
@@ -110,6 +113,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       repo.listRecurring(),
       repo.getBudgets(),
       repo.getCategories(),
+      repo.getCategoryKinds(),
       repo.getSubcategories(),
       repo.getLearnedCategories(),
       repo.getGeneratedMonths(),
@@ -120,7 +124,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       onDeactivated?.();
       throw new Error(t('err.deactivated'));
     }
-    data = { currency: profile.currency, accounts, txs, links, rec, bud, cats, subs, learn, gen, rules };
+    data = { currency: profile.currency, accounts, txs, links, rec, bud, cats, kinds, subs, learn, gen, rules };
   }
 
   async function generateDueRecurring(): Promise<void> {
@@ -171,13 +175,14 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     s.disabled = !data.subs[category]?.length;
   }
 
-  /** The form's category select: expense categories, or the fixed one of income or savings. */
+  /** The kind of category the form's type takes: income, or expense (also for money back). */
+  const formKind = (): CategoryKind => (sel('type').value === 'i' ? 'income' : 'expense');
+
+  /** The form's category select: the categories of the type's kind. */
   function fillFormCategories(value = sel('cat').value): void {
-    const fixed = fixedCategoryOf(sel('type').value as TxType);
     const c = sel('cat');
-    c.innerHTML = fixed ? `<option>${html.escape(fixed)}</option>` : html.categoryOptions(data.cats);
-    c.disabled = !!fixed;
-    if (!fixed && expenseCategoryNames(data.cats).includes(value)) c.value = value;
+    c.innerHTML = html.categoryOptionsOfKind(data.cats, formKind(), data.kinds);
+    if (categoryNamesOfKind(data.cats, formKind(), data.kinds).includes(value)) c.value = value;
     fillSubs('subcat', c.value);
   }
 
@@ -254,9 +259,9 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   function fillSelects(): void {
     const selects = [sel('fc'), sel('rc'), sel('kwNewCat')];
     const values = selects.map((s) => s.value);
-    selects[0]!.innerHTML = html.categoryOptions(data.cats, true, true);
-    selects[1]!.innerHTML = html.categoryOptions(data.cats);
-    selects[2]!.innerHTML = html.categoryOptions(data.cats);
+    selects[0]!.innerHTML = html.categoryOptions(data.cats, true, true, data.kinds);
+    selects[1]!.innerHTML = html.categoryOptions(data.cats, false, false, data.kinds);
+    selects[2]!.innerHTML = html.categoryOptions(data.cats, true, false, data.kinds);
     selects.forEach((s, i) => {
       if (values[i]) s.value = values[i]!;
     });
@@ -278,7 +283,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   }
 
   function renderSettings(): void {
-    $('bud').innerHTML = html.budgetInputsHtml(data.cats, data.bud);
+    $('bud').innerHTML = html.budgetInputsHtml(data.cats, data.bud, data.kinds);
     doc.querySelectorAll<HTMLInputElement>('[data-b]').forEach((i) =>
       i.addEventListener('change', () => {
         const v = parseAmount(i.value);
@@ -289,17 +294,17 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     $('alist').innerHTML = html.accountSettingsHtml(overview(data.accounts, data.txs).balances);
     $('adeleted').innerHTML = html.deletedAccountsHtml(data.accounts.filter((a) => a.deletedAt));
     const open = new Set([...doc.querySelectorAll<HTMLDetailsElement>('[data-subs]')].filter((d) => d.open).map((d) => d.dataset.subs!));
-    $('catList').innerHTML = html.categoryEditorHtml(data.cats, categoryUsage(), data.subs, open);
+    $('catList').innerHTML = html.categoryEditorHtml(data.cats, categoryUsage(), data.subs, open, data.kinds);
     renderRules();
     if (deleting && !data.cats[deleting]) closeDeletePanel();
   }
 
   const renderRules = () => ($('kwList').innerHTML = html.keywordRulesHtml(data.rules, data.cats, $('kwFilter').value));
 
-  /** Expenses and recurring expenses per category. */
+  /** Income, expenses and recurring expenses per category. */
   function categoryUsage(): Record<string, number> {
     const n: Record<string, number> = {};
-    for (const x of data.txs) if (x.type === 'e') n[x.cat] = (n[x.cat] || 0) + 1;
+    for (const x of data.txs) if (x.type === 'e' || x.type === 'i') n[x.cat] = (n[x.cat] || 0) + 1;
     for (const r of data.rec) n[r.cat] = (n[r.cat] || 0) + 1;
     return n;
   }
@@ -368,7 +373,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       sel('toAcc').reportValidity();
       return;
     }
-    const cat = transfer ? '' : (fixedCategoryOf(type) ?? sel('cat').value);
+    const cat = transfer ? '' : sel('cat').value;
     const sub = transfer ? '' : sel('subcat').value;
     const toName = data.accounts.find((a) => a.id === to)?.name ?? '';
     const fields = { date, amount: back ? -amount : amount, desc: desc || sub || cat || toName, cat, sub, type, tags: $('tags').value.trim(), acc };
@@ -423,12 +428,6 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   $('desc').addEventListener('input', () => {
     const text = $('desc').value;
     if (sel('type').value === 't') return;
-    const fixed = fixedCategoryOf(sel('type').value as TxType);
-    if (fixed) {
-      const s = guessSubcategory(text, data.subs, fixed);
-      if (s && !subTouched) sel('subcat').value = s.sub;
-      return;
-    }
     if (touched) {
       const s = guessSubcategory(text, data.subs, sel('cat').value);
       if (s && !subTouched) sel('subcat').value = s.sub;
@@ -436,8 +435,11 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     }
     // A keyword rule or learned merchant decides the category; a subcategory named in
     // the description (e.g. "Netflix") fills in the rest, or the category when no rule matched.
-    const g = guessCategory(text, data.learn, data.rules, data.cats);
-    const s = guessSubcategory(text, data.subs, g ?? undefined);
+    const kind = formKind();
+    const guessed = guessCategory(text, data.learn, data.rules, data.cats);
+    // Only a category of the form's kind: an income rule doesn't turn an expense into income.
+    const g = guessed && kindOf(guessed, data.kinds) === kind ? guessed : null;
+    const s = guessSubcategory(text, data.subs, g ?? undefined, categoryNamesOfKind(data.cats, kind, data.kinds));
     const cat = g ?? s?.cat;
     if (!cat) return;
     if (cat !== sel('cat').value) {
@@ -582,11 +584,11 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   $('ncb').addEventListener('click', () => {
     const name = $('nc').value.trim();
     if (!name) return;
-    if (data.cats[name] || isIncomeCategory(name)) return toast(t('cat.exists', { name }));
+    if (data.cats[name]) return toast(t('cat.exists', { name }));
     $('nc').value = '';
     const color = $('ncc').value;
     $('ncc').value = nextCategoryColor({ ...data.cats, [name]: color });
-    void update(() => repo.saveCategory(name, color));
+    void update(() => repo.saveCategory(name, color, sel('nck').value as CategoryKind));
   });
 
   function closeDeletePanel(): void {
@@ -597,7 +599,8 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   function openDeletePanel(name: string): void {
     deleting = name;
     const n = categoryUsage()[name] || 0;
-    const others = expenseCategoryNames(data.cats).filter((c) => c !== name);
+    const others = categoryNamesOfKind(data.cats, kindOf(name, data.kinds), data.kinds).filter((c) => c !== name);
+    if (!others.length) return toast(t('cat.lastOfKind'));
     $('catDeleteText').textContent = n ? tn('catDel.used', n, { name }) : t('catDel.unused', { name });
     $('catDeleteMoveLabel').hidden = !n;
     sel('catDeleteTo').innerHTML = others.map((c) => `<option>${html.escape(c)}</option>`).join('');
@@ -655,7 +658,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       const input = [...doc.querySelectorAll<HTMLInputElement>('[data-cat-name]')].find((i) => i.dataset.catName === old)!;
       const name = input.value.trim();
       if (!name || name === old) return;
-      if (data.cats[name] || isIncomeCategory(name)) return toast(t('cat.exists', { name }));
+      if (data.cats[name]) return toast(t('cat.exists', { name }));
       void update(
         () => repo.renameCategory(old, name),
         async () => {

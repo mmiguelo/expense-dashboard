@@ -31,7 +31,7 @@ select results_eq(format('select count(*)::int from public.keyword_rules where u
 select results_eq(format('select count(*)::int from public.subcategories where user_id = %L', :'alice'),
   'select count(*)::int from public.default_subcategories', 'a new account gets the default subcategories');
 select results_eq(format($$select name from public.subcategories where user_id = %L and category = 'Rendimentos' order by id$$, :'alice'),
-  $$values ('Mais-Valias'::text), ('Salário'), ('Subsídios'), ('Taxas & Impostos'), ('Vendas')$$, 'subcategories are copied in order');
+  $$values ('Benefícios'::text), ('Mais-Valias'), ('Salário'), ('Juros'), ('Subsídios'), ('Vendas')$$, 'subcategories are copied in order');
 select results_eq(format($$select category from public.keyword_rules where user_id = %L and keyword = 'pingo doce'$$, :'alice'),
   $$values ('Alimentação'::text)$$, 'keyword rules are copied with their category');
 

@@ -84,7 +84,7 @@ export const en: Record<MessageKey, string> = {
 
   'settings.categories': 'Categories',
   'settings.categoriesHelp':
-    'Renaming or deleting a category updates your transactions, recurring expenses, rules and budgets. Open a category to add or remove its subcategories. "Rendimentos" holds your income and can\'t be renamed or deleted.',
+    'Renaming or deleting a category updates your transactions, recurring expenses, rules and budgets. Open a category to add or remove its subcategories. You can have several expense and income categories; a category\'s type can\'t change once it exists.',
   'settings.newCategory': 'New category',
   'settings.newCategoryPlaceholder': 'e.g. Pets',
   'settings.colour': 'Colour',
@@ -335,4 +335,8 @@ export const en: Record<MessageKey, string> = {
   'list.owed': 'still owed {amount}',
   'list.settled': 'paid back',
   'ov.owed': 'owed to you',
+  'cat.expenses': 'Expenses',
+  'cat.incomes': 'Income',
+  'cat.kindLabel': 'Type',
+  'cat.lastOfKind': 'This is your last category of this type, so it can’t be deleted.',
 };

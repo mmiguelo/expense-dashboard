@@ -35,14 +35,14 @@ export class SupabaseAdminRepository implements AdminRepository {
   }
 
   async listDefaultCategories(): Promise<DefaultCategory[]> {
-    const { data, error } = await this.db.from('default_categories').select('id, name, color, sort_order').order('sort_order').order('id');
+    const { data, error } = await this.db.from('default_categories').select('id, name, color, sort_order, kind').order('sort_order').order('id');
     if (error) throw toError(error);
-    return (data ?? []).map((r) => ({ id: Number(r.id), name: r.name, color: r.color, sortOrder: r.sort_order }));
+    return (data ?? []).map((r) => ({ id: Number(r.id), name: r.name, color: r.color, sortOrder: r.sort_order, kind: r.kind }));
   }
 
-  async saveDefaultCategory({ id, name, color, sortOrder }: DefaultCategory): Promise<void> {
+  async saveDefaultCategory({ id, name, color, sortOrder, kind }: DefaultCategory): Promise<void> {
     const row = { name: name.trim(), color, sort_order: sortOrder };
-    if (id === undefined) check(await this.db.from('default_categories').insert(row));
+    if (id === undefined) check(await this.db.from('default_categories').insert({ ...row, kind: kind ?? 'expense' }));
     else check(await this.db.from('default_categories').update(row).eq('id', id));
   }
 

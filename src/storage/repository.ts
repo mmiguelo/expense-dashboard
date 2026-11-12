@@ -2,6 +2,8 @@ import type {
   Account,
   Budgets,
   Categories,
+  CategoryKind,
+  CategoryKinds,
   GeneratedMonths,
   KeywordRule,
   LearnedCategories,
@@ -64,7 +66,9 @@ export interface Repository {
   /** In display order. */
   getCategories(): Promise<Categories>;
   /** Add a category, or change its colour. */
-  saveCategory(name: string, color: string): Promise<void>;
+  /** Add a category (of `kind`), or change a category's colour (leave `kind` out). */
+  saveCategory(name: string, color: string, kind?: CategoryKind): Promise<void>;
+  getCategoryKinds(): Promise<CategoryKinds>;
   /** Rename, updating its transactions, recurring expenses, rules and budget. */
   renameCategory(oldName: string, newName: string): Promise<void>;
   /**

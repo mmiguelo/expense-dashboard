@@ -136,7 +136,7 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
     it('has subcategories: defaults, add, delete, and on transactions and recurring expenses', async () => {
       const r = repoOf(await signUp());
       const subs = await r.getSubcategories();
-      expect(subs['Rendimentos']).toEqual(['Mais-Valias', 'Salário', 'Subsídios', 'Taxas & Impostos', 'Vendas']);
+      expect(subs['Rendimentos']).toEqual(['Benefícios', 'Mais-Valias', 'Salário', 'Juros', 'Subsídios', 'Vendas']);
       expect(subs['Alimentação']).toEqual(['Mercearia', 'Peixaria', 'Supermercado', 'Talho']);
 
       await r.addSubcategory('Alimentação', 'Padaria');

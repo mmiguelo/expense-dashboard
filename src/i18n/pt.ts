@@ -87,7 +87,7 @@ export const pt = {
 
   'settings.categories': 'Categorias',
   'settings.categoriesHelp':
-    'Mudar o nome ou apagar uma categoria atualiza os seus movimentos, despesas fixas, regras e orçamentos. Abra uma categoria para adicionar ou remover subcategorias. "Rendimentos" guarda as suas receitas e não pode mudar de nome nem ser apagada.',
+    'Mudar o nome ou apagar uma categoria atualiza os seus movimentos, despesas fixas, regras e orçamentos. Abra uma categoria para adicionar ou remover subcategorias. Pode ter várias categorias de despesas e de receitas; o tipo de uma categoria não muda depois de criada.',
   'settings.newCategory': 'Nova categoria',
   'settings.newCategoryPlaceholder': 'ex.: Animais',
   'settings.colour': 'Cor',
@@ -344,6 +344,10 @@ export const pt = {
   'list.owed': 'falta receber {amount}',
   'list.settled': 'reembolsada',
   'ov.owed': 'a receber de reembolsos',
+  'cat.expenses': 'Despesas',
+  'cat.incomes': 'Receitas',
+  'cat.kindLabel': 'Tipo',
+  'cat.lastOfKind': 'É a sua última categoria deste tipo: não pode ser eliminada.',
 } as const;
 
 export type MessageKey = keyof typeof pt;

@@ -1,12 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { txTypeFromName, txTypeName, type TxTypeName } from '../backup';
-import { fixedCategoryOf, normalizeKeyword } from '../categories';
+import { INCOME_CATEGORY, normalizeKeyword } from '../categories';
 import { t } from '../i18n';
 import { generatedKey, parseGeneratedKey } from '../recurring';
 import type {
   Account,
   Budgets,
   Categories,
+  CategoryKind,
+  CategoryKinds,
   GeneratedMonths,
   KeywordRule,
   LearnedCategories,
@@ -201,7 +203,7 @@ const text = (s: unknown, max = MAX_TEXT) => String(s ?? '').slice(0, max);
 const color = (c: unknown) => (typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c) ? c : FALLBACK_COLOR);
 
 export interface ImportPayload {
-  categories?: { name: string; color: string }[];
+  categories?: { name: string; color: string; kind?: CategoryKind }[];
   subcategories?: { category: string; name: string }[];
   budgets?: { category: string; amount: number }[];
   corrections?: { merchant: string; category: string }[];
@@ -226,7 +228,7 @@ export function toImportPayload(data: Partial<Snapshot>): ImportPayload {
   if (data.cats)
     p.categories = Object.entries(data.cats)
       .filter(([name]) => name.trim())
-      .map(([name, c]) => ({ name: text(name, 100), color: color(c) }));
+      .map(([name, c]) => ({ name: text(name, 100), color: color(c), ...(data.kinds?.[name] ? { kind: data.kinds[name] } : {}) }));
   if (data.subs)
     p.subcategories = Object.entries(data.subs).flatMap(([category, names]) =>
       (Array.isArray(names) ? names : [])
@@ -300,7 +302,7 @@ export function toImportPayload(data: Partial<Snapshot>): ImportPayload {
         amount: x.amount,
         type: txTypeName(x.type),
         // Income is always in 'Rendimentos' (old backups say 'Income').
-        category: categorised ? (fixedCategoryOf(x.type) ?? text(x.cat, 100)) : null,
+        category: categorised ? (x.type === 'i' && x.cat === 'Income' ? INCOME_CATEGORY : text(x.cat, 100)) : null,
         subcategory: categorised ? text(x.sub, 100) : '',
         description: text(x.desc),
         tags: text(x.tags),
@@ -449,8 +451,14 @@ export class SupabaseRepository implements Repository {
     return Object.fromEntries((data ?? []).map((r) => [r.name, r.color]));
   }
 
-  async saveCategory(name: string, color: string): Promise<void> {
-    check(await this.db.from('categories').upsert({ name, color }, { onConflict: 'user_id,name' }));
+  async saveCategory(name: string, color: string, kind?: CategoryKind): Promise<void> {
+    check(await this.db.from('categories').upsert({ name, color, ...(kind ? { kind } : {}) }, { onConflict: 'user_id,name' }));
+  }
+
+  async getCategoryKinds(): Promise<CategoryKinds> {
+    const { data, error } = await this.db.from('categories').select('name, kind');
+    if (error) throw toError(error);
+    return Object.fromEntries((data ?? []).map((r) => [r.name, r.kind]));
   }
 
   async renameCategory(oldName: string, newName: string): Promise<void> {
@@ -511,7 +519,8 @@ export class SupabaseRepository implements Repository {
   }
 
   async exportSnapshot(): Promise<Snapshot> {
-    const [links, accounts, ex, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
+    const [kinds, links, accounts, ex, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
+      this.getCategoryKinds(),
       this.listLinks(),
       this.listAccounts(),
       this.listTransactions(),
@@ -523,7 +532,7 @@ export class SupabaseRepository implements Repository {
       this.getGeneratedMonths(),
       this.listKeywordRules(),
     ]);
-    return { links, accounts, ex, rec, bud, cats, subs, learn, gen, rules: rules.map(({ keyword, category }) => ({ keyword, category })) };
+    return { kinds, links, accounts, ex, rec, bud, cats, subs, learn, gen, rules: rules.map(({ keyword, category }) => ({ keyword, category })) };
   }
 
   async importSnapshot(data: Partial<Snapshot>, { replace }: { replace: boolean }): Promise<ImportResult> {

@@ -1,4 +1,4 @@
-import type { Profile, Role } from '../types';
+import type { CategoryKind, Profile, Role } from '../types';
 
 export interface DefaultCategory {
   /** Absent for one not saved yet. */
@@ -6,6 +6,8 @@ export interface DefaultCategory {
   name: string;
   color: string;
   sortOrder: number;
+  /** Set when the category is added; fixed after that. Absent means expense. */
+  kind?: CategoryKind;
 }
 
 export interface DefaultKeywordRule {

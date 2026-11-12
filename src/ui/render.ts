@@ -1,9 +1,9 @@
 import type { AccountBalance, CategoryRow, Change, HeatmapDay, Merchant, Overview, PeriodSummary, QuickPick, TrendBar } from '../analytics';
-import { categoryColor, expenseCategoryNames, INCOME_CATEGORY } from '../categories';
+import { categoryColor, categoryNamesOfKind, expenseCategoryNames } from '../categories';
 import { formatDmy, parseIsoDate } from '../dates';
 import { amountToInput, escapeHtml as esc, formatEur as eur } from '../format';
 import { monthNames, t, tn } from '../i18n';
-import type { Account, Budgets, Categories, KeywordRule, Mode, RecurringExpense, Subcategories, Transaction } from '../types';
+import type { Account, Budgets, Categories, CategoryKind, CategoryKinds, KeywordRule, Mode, RecurringExpense, Subcategories, Transaction } from '../types';
 import type { Outstanding } from '../analytics';
 
 // Pure HTML builders. Dashboard markup is kept identical to the original single-file app.
@@ -18,13 +18,18 @@ export function periodLabel(ref: string, mode: Mode): string {
 
 export const trendTitle = (mode: Mode): string => t(`trend.${mode}`);
 
-/** Expense categories; with `withIncome`, 'Rendimentos' last. */
-export const categoryOptions = (cats: Categories, withIncome = false, withAll = false): string =>
+/** Expense categories; with `withIncome`, income categories after them. */
+export const categoryOptions = (cats: Categories, withIncome = false, withAll = false, kinds: CategoryKinds = {}): string =>
   (withAll ? `<option value="">${esc(t('filter.allCategories'))}</option>` : '') +
-  expenseCategoryNames(cats)
+  [...expenseCategoryNames(cats, kinds), ...(withIncome ? categoryNamesOfKind(cats, 'income', kinds) : [])]
     .map((c) => `<option>${esc(c)}</option>`)
-    .join('') +
-  (withIncome ? `<option>${INCOME_CATEGORY}</option>` : '');
+    .join('');
+
+/** The categories of one kind, for the transaction form. */
+export const categoryOptionsOfKind = (cats: Categories, kind: CategoryKind, kinds: CategoryKinds): string =>
+  categoryNamesOfKind(cats, kind, kinds)
+    .map((c) => `<option>${esc(c)}</option>`)
+    .join('');
 
 /** Accounts to pick from, by id. */
 export const accountOptions = (accounts: Account[]): string =>
@@ -139,8 +144,8 @@ export function transactionListHtml(
 export const quickPicksHtml = (picks: QuickPick[]): string =>
   picks.map((c) => `<button type="button" data-chip='${esc(JSON.stringify(c))}'>${esc(c.desc)}</button>`).join('');
 
-export const budgetInputsHtml = (cats: Categories, budgets: Budgets): string =>
-  expenseCategoryNames(cats)
+export const budgetInputsHtml = (cats: Categories, budgets: Budgets, kinds: CategoryKinds = {}): string =>
+  expenseCategoryNames(cats, kinds)
     .map((c) => `<span>${esc(c)}</span><input inputmode="decimal" data-b="${esc(c)}" value="${budgets[c] || ''}" placeholder="${esc(t('budget.placeholder'))}">`)
     .join('');
 
@@ -229,27 +234,35 @@ export const settleRowsHtml = (outstanding: Outstanding[], shares: Record<string
 
 // ---- Settings ----
 
-/** `open`: categories whose subcategory list is shown. */
-export const categoryEditorHtml = (cats: Categories, usage: Record<string, number>, subs: Subcategories = {}, open: Set<string> = new Set()): string =>
-  Object.entries(cats)
-    .map(([name, color]) => {
-      const n = usage[name] || 0;
-      const e = esc(name);
-      const fixed = name === INCOME_CATEGORY;
-      const names = subs[name] || [];
-      const colour = `<input type="color" value="${esc(color)}" data-cat-color="${e}" aria-label="${esc(t('cat.colourOf', { name }))}">`;
-      const row = fixed
-        ? `<div class="erow">${colour}<input value="${e}" readonly aria-label="${esc(t('common.name'))}"><span class="mute">${t('cat.income')}</span><span></span></div>`
-        : `<div class="erow">${colour}<input value="${e}" data-cat-name="${e}" maxlength="100" aria-label="${esc(t('common.name'))}"><button type="button" data-cat-rename="${e}">${t('cat.rename')}</button><button type="button" class="x" data-cat-delete="${e}" aria-label="${esc(t('cat.deleteNamed', { name }))}" title="${esc(tn('cat.txCount', n))}">✕</button></div>`;
-      const chips = names
-        .map(
-          (s) =>
-            `<span class="subchip">${esc(s)}<button type="button" class="x" data-sub-delete="${esc(s)}" data-sub-cat="${e}" aria-label="${esc(t('cat.deleteNamed', { name: s }))}">✕</button></span>`,
-        )
-        .join('');
-      return `<div class="catblock" data-cat-row="${e}">${row}<details class="subs" data-subs="${e}"${open.has(name) ? ' open' : ''}><summary>${tn('sub.count', names.length)}</summary><div class="subchips">${chips}</div><div class="subadd"><input data-sub-new="${e}" placeholder="${esc(t('sub.new'))}" maxlength="100" aria-label="${esc(t('sub.newOf', { name }))}"><button type="button" data-sub-add="${e}">${t('common.add')}</button></div></details></div>`;
-    })
-    .join('') || `<div class="mute">${t('cat.empty')}</div>`;
+/** `open`: categories whose subcategory list is shown. Expense categories, then income ones. */
+export function categoryEditorHtml(
+  cats: Categories,
+  usage: Record<string, number>,
+  subs: Subcategories = {},
+  open: Set<string> = new Set(),
+  kinds: CategoryKinds = {},
+): string {
+  const block = (name: string): string => {
+    const color = cats[name]!;
+    const n = usage[name] || 0;
+    const e = esc(name);
+    const names = subs[name] || [];
+    const colour = `<input type="color" value="${esc(color)}" data-cat-color="${e}" aria-label="${esc(t('cat.colourOf', { name }))}">`;
+    const row = `<div class="erow">${colour}<input value="${e}" data-cat-name="${e}" maxlength="100" aria-label="${esc(t('common.name'))}"><button type="button" data-cat-rename="${e}">${t('cat.rename')}</button><button type="button" class="x" data-cat-delete="${e}" aria-label="${esc(t('cat.deleteNamed', { name }))}" title="${esc(tn('cat.txCount', n))}">✕</button></div>`;
+    const chips = names
+      .map(
+        (s) =>
+          `<span class="subchip">${esc(s)}<button type="button" class="x" data-sub-delete="${esc(s)}" data-sub-cat="${e}" aria-label="${esc(t('cat.deleteNamed', { name: s }))}">✕</button></span>`,
+      )
+      .join('');
+    return `<div class="catblock" data-cat-row="${e}">${row}<details class="subs" data-subs="${e}"${open.has(name) ? ' open' : ''}><summary>${tn('sub.count', names.length)}</summary><div class="subchips">${chips}</div><div class="subadd"><input data-sub-new="${e}" placeholder="${esc(t('sub.new'))}" maxlength="100" aria-label="${esc(t('sub.newOf', { name }))}"><button type="button" data-sub-add="${e}">${t('common.add')}</button></div></details></div>`;
+  };
+  const group = (kind: CategoryKind, title: string) => {
+    const names = categoryNamesOfKind(cats, kind, kinds);
+    return names.length ? `<h3 class="subhead">${title}</h3>${names.map(block).join('')}` : '';
+  };
+  return group('expense', t('cat.expenses')) + group('income', t('cat.incomes')) || `<div class="mute">${t('cat.empty')}</div>`;
+}
 
 export function keywordRulesHtml(rules: KeywordRule[], cats: Categories, filter: string): string {
   const f = filter.toLowerCase().trim();

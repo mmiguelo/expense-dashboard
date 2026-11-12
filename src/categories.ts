@@ -1,9 +1,9 @@
-import type { Categories, KeywordRule, LearnedCategories, Subcategories, Transaction, TxType } from './types';
+import type { Categories, CategoryKind, CategoryKinds, KeywordRule, LearnedCategories, Subcategories, Transaction } from './types';
 
 // The categories and keyword rules themselves are data: each account has its own, copied
 // from the defaults an admin manages (tables default_categories and default_keyword_rules).
 
-/** The category of every income transaction. Old data used 'Income'. */
+/** The income category everyone starts with. Old data used 'Income'. */
 export const INCOME_CATEGORY = 'Rendimentos';
 const LEGACY_INCOME_CATEGORY = 'Income';
 const INCOME_COLOR = '#5e8c61';
@@ -11,11 +11,15 @@ const FALLBACK_COLOR = '#a39b8b';
 
 export const isIncomeCategory = (cat: string): boolean => cat === INCOME_CATEGORY || cat === LEGACY_INCOME_CATEGORY;
 
-/** The fixed category of a transaction type: income's; null when the user picks one (expenses) or there is none. */
-export const fixedCategoryOf = (type: TxType): string | null => (type === 'i' ? INCOME_CATEGORY : null);
+/** A category's kind; without one (old data), 'Rendimentos' and 'Income' are income. */
+export const kindOf = (cat: string, kinds: CategoryKinds = {}): CategoryKind => kinds[cat] ?? (isIncomeCategory(cat) ? 'income' : 'expense');
+
+/** Category names of one kind, in display order. */
+export const categoryNamesOfKind = (cats: Categories, kind: CategoryKind, kinds: CategoryKinds = {}): string[] =>
+  Object.keys(cats).filter((c) => kindOf(c, kinds) === kind);
 
 /** Category names an expense can use, in display order. */
-export const expenseCategoryNames = (cats: Categories): string[] => Object.keys(cats).filter((c) => !isIncomeCategory(c));
+export const expenseCategoryNames = (cats: Categories, kinds: CategoryKinds = {}): string[] => categoryNamesOfKind(cats, 'expense', kinds);
 
 /** Colours suggested, in rotation, for new categories. */
 const CUSTOM_PALETTE = ['#8b6b56', '#7a2e3c', '#6f7442', '#b5643c', '#4f6d7a', '#c2a14d'];
@@ -48,11 +52,17 @@ export function guessCategory(text: string, learned: LearnedCategories, rules: K
  * Subscrições / Netflix. Within `category` when given, otherwise in any category.
  * Names shorter than 3 letters are ignored, and the longest match wins.
  */
-export function guessSubcategory(text: string, subs: Subcategories, category?: string): { cat: string; sub: string } | null {
+export function guessSubcategory(
+  text: string,
+  subs: Subcategories,
+  category?: string,
+  /** Without `category`: the categories to look in (by default, all but income). */
+  among?: string[],
+): { cat: string; sub: string } | null {
   const s = ' ' + text.toLowerCase().trim() + ' ';
   let best: { cat: string; sub: string } | null = null;
   for (const [cat, names] of Object.entries(subs)) {
-    if (category !== undefined ? cat !== category : isIncomeCategory(cat)) continue;
+    if (category !== undefined ? cat !== category : among ? !among.includes(cat) : isIncomeCategory(cat)) continue;
     for (const sub of names) {
       const n = sub.toLowerCase();
       if (n.length >= 3 && s.includes(n) && (!best || n.length > best.sub.length)) best = { cat, sub };

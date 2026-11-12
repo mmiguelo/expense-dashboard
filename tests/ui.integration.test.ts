@@ -362,7 +362,18 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     ]);
 
     openView('settings');
-    expect(document.querySelector('[data-cat-rename="Rendimentos"]')).toBeNull();
+    // Income categories are the user's to manage too, and new ones can be added.
+    expect(document.querySelector('[data-cat-rename="Rendimentos"]')).not.toBeNull();
+    type('nc', 'Rendas recebidas');
+    $<HTMLSelectElement>('nck').value = 'income';
+    $('ncb').click();
+    await until(() => !!document.querySelector('[data-cat-rename="Rendas recebidas"]'), 'income category added');
+    expect((await (await accountRepo(email)).getCategoryKinds())['Rendas recebidas']).toBe('income');
+    openView('dashboard');
+    $<HTMLSelectElement>('type').value = 'i';
+    $('type').dispatchEvent(new Event('change'));
+    expect([...$<HTMLSelectElement>('cat').options].map((o) => o.value)).toEqual(['Rendimentos', 'Rendas recebidas']);
+    openView('settings');
     const input = document.querySelector<HTMLInputElement>('[data-sub-new="Lazer"]')!;
     input.value = 'Bowling';
     (document.querySelector('[data-sub-add="Lazer"]') as HTMLElement).click();

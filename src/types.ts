@@ -62,6 +62,12 @@ export type Budgets = Record<string, number>;
 /** Category name -> colour. Insertion order is display order. */
 export type Categories = Record<string, string>;
 
+/** Whether a category is for spending or for income. Fixed once the category exists. */
+export type CategoryKind = 'expense' | 'income';
+
+/** Category name -> its kind. */
+export type CategoryKinds = Record<string, CategoryKind>;
+
 /** Category name -> its subcategories, in display order. */
 export type Subcategories = Record<string, string[]>;
 
@@ -144,6 +150,8 @@ export interface Snapshot {
   gen: GeneratedMonths;
   /** Keyword rules; absent in backups from before accounts had their own. */
   rules?: KeywordRule[];
+  /** Category kinds; absent in backups from before income categories could be added. */
+  kinds?: CategoryKinds;
   /** Money accounts; absent in backups from before them. */
   accounts?: Account[];
   /** What money back settled; absent in backups from before reimbursements. */
