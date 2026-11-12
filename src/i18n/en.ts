@@ -345,4 +345,8 @@ export const en: Record<MessageKey, string> = {
   'form.adjustment': 'Balance adjustment',
   'form.correctBalance': 'Correct balance ({symbol})',
   'form.adjustNone': 'That account already has that balance on that date.',
+  'admin.roadmap': 'To do',
+  'admin.roadmapHelp': 'Features decided but not built yet. Only admins see this list.',
+  'admin.roadmapNew': 'New item',
+  'admin.roadmapEmpty': 'Nothing to do.',
 };

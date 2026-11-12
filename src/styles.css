@@ -237,3 +237,8 @@ label.check{flex-direction:row;align-items:center;gap:8px;align-self:center}
 .settle{margin-top:12px;padding-top:10px;border-top:1px dotted var(--line)}
 .srow{display:grid;grid-template-columns:auto 1fr auto 96px;gap:10px;align-items:center;padding:5px 0;font-size:13.5px;color:var(--ink);font-weight:400}
 .srow input[data-share]{padding:5px 8px}
+
+/* Admin to-do list */
+.rmrow{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:7px 0;border-top:1px dotted var(--line);font-size:14px;color:var(--ink);font-weight:400}
+.rmrow:first-child{border-top:0}
+.rmrow.done span{color:var(--mute);text-decoration:line-through}

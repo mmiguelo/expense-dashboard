@@ -354,6 +354,10 @@ export const pt = {
   'form.adjustment': 'Acerto de saldo',
   'form.correctBalance': 'Saldo correto ({symbol})',
   'form.adjustNone': 'O saldo dessa conta nessa data já é esse.',
+  'admin.roadmap': 'Por fazer',
+  'admin.roadmapHelp': 'Funcionalidades decididas mas ainda por fazer. Só os administradores veem esta lista.',
+  'admin.roadmapNew': 'Nova tarefa',
+  'admin.roadmapEmpty': 'Nada por fazer.',
 } as const;
 
 export type MessageKey = keyof typeof pt;

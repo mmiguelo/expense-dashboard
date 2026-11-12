@@ -345,4 +345,8 @@ export const es: Record<MessageKey, string> = {
   'form.adjustment': 'Ajuste de saldo',
   'form.correctBalance': 'Saldo correcto ({symbol})',
   'form.adjustNone': 'Esa cuenta ya tiene ese saldo en esa fecha.',
+  'admin.roadmap': 'Pendiente',
+  'admin.roadmapHelp': 'Funciones decididas pero aún por hacer. Solo los administradores ven esta lista.',
+  'admin.roadmapNew': 'Nueva tarea',
+  'admin.roadmapEmpty': 'Nada pendiente.',
 };

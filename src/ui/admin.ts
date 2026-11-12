@@ -1,6 +1,6 @@
 import { escapeHtml as esc } from '../format';
 import { t, translateError } from '../i18n';
-import { ROLES, type AdminRepository, type DefaultCategory, type DefaultKeywordRule } from '../storage/adminRepository';
+import { ROLES, type AdminRepository, type DefaultCategory, type DefaultKeywordRule, type RoadmapItem } from '../storage/adminRepository';
 import type { Profile } from '../types';
 
 // The Admin screen: accounts, and the defaults new accounts start with. What it may do is
@@ -25,6 +25,7 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
   const $ = <T extends HTMLElement = HTMLInputElement>(id: string) => doc.getElementById(id) as T;
   let profiles: Profile[] = [];
   let cats: DefaultCategory[] = [];
+  let roadmap: RoadmapItem[] = [];
   let rules: DefaultKeywordRule[] = [];
 
   const message = (e: unknown) => (e as Error)?.message ?? String(e);
@@ -87,13 +88,48 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
 
   async function refresh(): Promise<void> {
     try {
-      [profiles, cats, rules] = await Promise.all([repo.listProfiles(), repo.listDefaultCategories(), repo.listDefaultKeywordRules()]);
+      [profiles, cats, rules, roadmap] = await Promise.all([
+        repo.listProfiles(),
+        repo.listDefaultCategories(),
+        repo.listDefaultKeywordRules(),
+        repo.listRoadmap(),
+      ]);
     } catch (e) {
       notify(t('admin.loadFailed', { message: translateError(message(e)) }));
     }
     renderUsers();
     renderDefaults();
+    renderRoadmap();
   }
+
+  // ---- roadmap: what is decided but not built yet ----
+  function renderRoadmap(): void {
+    $('roadmapList').innerHTML =
+      roadmap
+        .map(
+          (r) =>
+            `<label class="rmrow${r.done ? ' done' : ''}"><input type="checkbox" data-rm-done="${r.id}"${r.done ? ' checked' : ''}><span>${esc(r.text)}</span><button type="button" class="x" data-rm-delete="${r.id}" aria-label="${esc(t('common.delete'))}">✕</button></label>`,
+        )
+        .join('') || `<div class="mute">${t('admin.roadmapEmpty')}</div>`;
+  }
+
+  $('rmAdd').addEventListener('click', () => {
+    const text = $('rmText').value.trim();
+    if (!text) return;
+    $('rmText').value = '';
+    void run(() => repo.saveRoadmapItem({ text, done: false }));
+  });
+  $('roadmapList').addEventListener('change', (e) => {
+    const id = Number((e.target as HTMLElement).dataset.rmDone);
+    const item = roadmap.find((r) => r.id === id);
+    if (item) void run(() => repo.saveRoadmapItem({ ...item, done: (e.target as HTMLInputElement).checked }));
+  });
+  $('roadmapList').addEventListener('click', (e) => {
+    const id = Number((e.target as HTMLElement).dataset.rmDelete);
+    if (!id) return;
+    e.preventDefault();
+    void run(() => repo.deleteRoadmapItem(id));
+  });
 
   // ---- tabs ----
   $('adminTabs').addEventListener('click', (e) => {
@@ -102,6 +138,7 @@ export function startAdmin({ doc, repo, me, notify }: AdminOptions): AdminHandle
     doc.querySelectorAll<HTMLElement>('#adminTabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
     $('adminUsers').hidden = tab !== 'users';
     $('adminDefaults').hidden = tab !== 'defaults';
+    $('adminRoadmap').hidden = tab !== 'roadmap';
   });
 
   // ---- users ----

@@ -360,6 +360,19 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
       // Accounts that already have it keep it.
       expect((await newcomer.getCategories())[name]).toBe('#c05299');
     });
+
+    it('keeps a to-do list only admins can see', async () => {
+      const repo = new SupabaseAdminRepository(admin.db);
+      const before = await repo.listRoadmap();
+      expect(before.length).toBeGreaterThan(0);
+      await repo.saveRoadmapItem({ text: 'Test item', done: false });
+      const item = (await repo.listRoadmap()).find((r) => r.text === 'Test item')!;
+      await repo.saveRoadmapItem({ ...item, done: true });
+      expect((await repo.listRoadmap()).find((r) => r.id === item.id)!.done).toBe(true);
+      expect(await new SupabaseAdminRepository(member.db).listRoadmap()).toEqual([]);
+      await repo.deleteRoadmapItem(item.id!);
+      expect((await repo.listRoadmap()).some((r) => r.id === item.id)).toBe(false);
+    });
   });
 
   describe('deactivation', () => {

@@ -136,7 +136,7 @@
 </div>
 
 <div id="viewAdmin" hidden>
-<div class="seg" id="adminTabs" style="margin-bottom:14px;width:max-content"><button type="button" data-tab="users" class="on" data-i18n="admin.users">Utilizadores</button><button type="button" data-tab="defaults" data-i18n="admin.defaults">Predefinições</button></div>
+<div class="seg" id="adminTabs" style="margin-bottom:14px;width:max-content"><button type="button" data-tab="users" class="on" data-i18n="admin.users">Utilizadores</button><button type="button" data-tab="defaults" data-i18n="admin.defaults">Predefinições</button><button type="button" data-tab="roadmap" data-i18n="admin.roadmap">Por fazer</button></div>
 <section class="card" id="adminUsers"><h2 data-i18n="admin.accounts">Contas</h2>
 <p class="mute" data-i18n="admin.accountsHelp">Só vê os dados das contas, nunca as despesas de ninguém.</p>
 <div class="tablewrap"><table class="grid"><thead><tr><th data-i18n="admin.colEmail">Email</th><th data-i18n="admin.colName">Nome</th><th data-i18n="admin.colRole">Perfil</th><th data-i18n="admin.colStatus">Estado</th><th data-i18n="admin.colCreated">Criada em</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div></section>
@@ -150,6 +150,10 @@
 <div class="fg" style="margin-top:8px"><input id="dkFilter" placeholder="Filtrar regras…" data-i18n-placeholder="settings.filterRules"></div>
 <div id="defKwList" class="scrollbox"></div></section>
 </div>
+<section class="card" id="adminRoadmap" hidden><h2 data-i18n="admin.roadmap">Por fazer</h2>
+<p class="mute" data-i18n="admin.roadmapHelp">Funcionalidades decididas mas ainda por fazer.</p>
+<div id="roadmapList"></div>
+<div class="fg" style="margin-top:10px"><label><span data-i18n="admin.roadmapNew">Nova tarefa</span><input id="rmText" maxlength="500"></label><button type="button" id="rmAdd" data-i18n="common.add">Adicionar</button></div></section>
 </div>
 </main><div class="toast" id="toast"><span id="tm"></span><button id="undo" data-i18n="common.undo">Anular</button></div>
 <script type="module" src="/src/main.ts"></script></body></html>

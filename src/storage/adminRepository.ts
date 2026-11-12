@@ -10,6 +10,14 @@ export interface DefaultCategory {
   kind?: CategoryKind;
 }
 
+/** An item on the admins' to-do list for the app. */
+export interface RoadmapItem {
+  /** Absent for one not saved yet. */
+  id?: number;
+  text: string;
+  done: boolean;
+}
+
 export interface DefaultKeywordRule {
   id?: number;
   category: string;
@@ -35,6 +43,12 @@ export interface AdminRepository {
   listDefaultKeywordRules(): Promise<DefaultKeywordRule[]>;
   saveDefaultKeywordRule(rule: DefaultKeywordRule): Promise<void>;
   deleteDefaultKeywordRule(id: number): Promise<void>;
+
+  /** The admins' to-do list, oldest first. */
+  listRoadmap(): Promise<RoadmapItem[]>;
+  /** Add (no id) or change. */
+  saveRoadmapItem(item: RoadmapItem): Promise<void>;
+  deleteRoadmapItem(id: number): Promise<void>;
 }
 
 export const ROLES: Role[] = ['member', 'admin'];

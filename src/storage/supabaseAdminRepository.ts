@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeKeyword } from '../categories';
 import { t } from '../i18n';
 import type { Profile } from '../types';
-import type { AdminRepository, DefaultCategory, DefaultKeywordRule } from './adminRepository';
+import type { AdminRepository, DefaultCategory, DefaultKeywordRule, RoadmapItem } from './adminRepository';
 import { profileFromRow, toError, type ProfileRow } from './supabaseRepository';
 
 // Row Level Security only lets active admins read other profiles or change the defaults;
@@ -64,5 +64,21 @@ export class SupabaseAdminRepository implements AdminRepository {
 
   async deleteDefaultKeywordRule(id: number): Promise<void> {
     check(await this.db.from('default_keyword_rules').delete().eq('id', id));
+  }
+
+  async listRoadmap(): Promise<RoadmapItem[]> {
+    const { data, error } = await this.db.from('roadmap_items').select('id, text, done').order('id');
+    if (error) throw toError(error);
+    return (data ?? []).map((r) => ({ id: Number(r.id), text: r.text, done: r.done }));
+  }
+
+  async saveRoadmapItem({ id, text, done }: RoadmapItem): Promise<void> {
+    const row = { text: text.trim(), done };
+    if (id === undefined) check(await this.db.from('roadmap_items').insert(row));
+    else check(await this.db.from('roadmap_items').update(row).eq('id', id));
+  }
+
+  async deleteRoadmapItem(id: number): Promise<void> {
+    check(await this.db.from('roadmap_items').delete().eq('id', id));
   }
 }
