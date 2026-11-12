@@ -54,6 +54,13 @@ export interface RecurringExpense {
   day: number;
   /** First month to generate, YYYY-MM. */
   start: string;
+  /** Expense (default), income or transfer. */
+  type?: 'e' | 'i' | 't';
+  /** Account the entries go on; absent: the first account. */
+  acc?: string;
+  /** Transfers: the receiving account. */
+  to?: string;
+  reimb?: 1;
 }
 
 /** Monthly budget per category name, in euros. */

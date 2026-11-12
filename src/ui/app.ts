@@ -128,7 +128,10 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   }
 
   async function generateDueRecurring(): Promise<void> {
-    const due = generateRecurring(data.rec, data.gen, today(), newId);
+    // Rules on archived or deleted accounts wait until the account is open again.
+    const closed = new Set(data.accounts.filter((a) => a.archived || a.deletedAt).map((a) => a.id));
+    const rules = data.rec.filter((r) => !(r.acc && closed.has(r.acc)) && !(r.to && closed.has(r.to)));
+    const due = generateRecurring(rules, data.gen, today(), newId);
     if (!due.length) return;
     await repo.addGeneratedRecurring(due);
     await load();
@@ -257,16 +260,33 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   });
 
   function fillSelects(): void {
-    const selects = [sel('fc'), sel('rc'), sel('kwNewCat')];
+    const selects = [sel('fc'), sel('kwNewCat')];
     const values = selects.map((s) => s.value);
     selects[0]!.innerHTML = html.categoryOptions(data.cats, true, true, data.kinds);
-    selects[1]!.innerHTML = html.categoryOptions(data.cats, false, false, data.kinds);
-    selects[2]!.innerHTML = html.categoryOptions(data.cats, true, false, data.kinds);
+    selects[1]!.innerHTML = html.categoryOptions(data.cats, true, false, data.kinds);
     selects.forEach((s, i) => {
       if (values[i]) s.value = values[i]!;
     });
     fillFormCategories();
     fillAccounts();
+    fillRecurringForm();
+  }
+
+  /** The recurring form: categories of its type's kind, accounts when there are several, To for transfers. */
+  function fillRecurringForm(): void {
+    const type = sel('rtype').value;
+    const open = data.accounts.filter((a) => !a.deletedAt && !a.archived);
+    const ids = open.map((a) => a.id);
+    const [acc, to, cat] = [sel('racc').value, sel('rto').value, sel('rc').value];
+    sel('racc').innerHTML = sel('rto').innerHTML = html.accountOptions(open);
+    sel('racc').value = ids.includes(acc) ? acc : (ids[0] ?? '');
+    sel('rto').value = ids.includes(to) && to !== sel('racc').value ? to : (ids.find((id) => id !== sel('racc').value) ?? '');
+    sel('rtype').querySelector<HTMLOptionElement>('option[value="t"]')!.hidden = open.length < 2;
+    $('raccL').hidden = open.length < 2;
+    $('rtoL').hidden = type !== 't';
+    $('rcL').hidden = $('rsubL').hidden = type === 't';
+    sel('rc').innerHTML = html.categoryOptionsOfKind(data.cats, type === 'i' ? 'income' : 'expense', data.kinds);
+    if ([...sel('rc').options].some((o) => o.value === cat)) sel('rc').value = cat;
     fillSubs('rsub', sel('rc').value);
   }
 
@@ -290,7 +310,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
         void update(() => repo.setBudget(i.dataset.b!, v > 0 ? v : null));
       }),
     );
-    $('rlist').innerHTML = html.recurringListHtml(data.rec, data.cats);
+    $('rlist').innerHTML = html.recurringListHtml(data.rec, data.cats, data.accounts);
     $('alist').innerHTML = html.accountSettingsHtml(overview(data.accounts, data.txs).balances);
     $('adeleted').innerHTML = html.deletedAccountsHtml(data.accounts.filter((a) => a.deletedAt));
     const open = new Set([...doc.querySelectorAll<HTMLDetailsElement>('[data-subs]')].filter((d) => d.open).map((d) => d.dataset.subs!));
@@ -461,6 +481,8 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   sel('acc').addEventListener('change', () => fillAccounts());
   sel('toAcc').addEventListener('change', () => sel('toAcc').setCustomValidity(''));
   sel('rc').addEventListener('change', () => fillSubs('rsub', sel('rc').value, ''));
+  sel('rtype').addEventListener('change', fillRecurringForm);
+  sel('racc').addEventListener('change', fillRecurringForm);
   $('cancel').addEventListener('click', resetForm);
   $('sub').addEventListener('click', () => void submitTransaction());
   $('date').addEventListener('input', () => $('date').setCustomValidity(''));
@@ -566,14 +588,20 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     const amount = parseAmount($('ra').value);
     const desc = $('rd').value.trim();
     if (!(amount > 0) || !desc) return;
+    const type = sel('rtype').value as 'e' | 'i' | 't';
+    const transfer = type === 't';
+    if (transfer && (!sel('rto').value || sel('rto').value === sel('racc').value)) return toast(t('form.sameAccount'));
     const rule: RecurringExpense = {
       id: newId(),
       desc,
       amount,
-      cat: sel('rc').value,
-      ...(sel('rsub').value ? { sub: sel('rsub').value } : {}),
+      cat: transfer ? '' : sel('rc').value,
+      ...(!transfer && sel('rsub').value ? { sub: sel('rsub').value } : {}),
       day: +$('rday').value || 1,
       start: today().slice(0, 7),
+      ...(type !== 'e' ? { type } : {}),
+      ...(sel('racc').value ? { acc: sel('racc').value } : {}),
+      ...(transfer ? { to: sel('rto').value } : {}),
     };
     ['rd', 'ra'].forEach((i) => ($(i).value = ''));
     void update(() => repo.saveRecurring(rule));

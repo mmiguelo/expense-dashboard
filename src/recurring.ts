@@ -36,7 +36,20 @@ export function generateRecurring(
         out.push({
           recurringId: r.id,
           month,
-          transaction: { id: newId(), date, amount: r.amount, desc: r.desc, cat: r.cat, ...(r.sub ? { sub: r.sub } : {}), type: 'e', fixed: 1, tags: 'recurring' },
+          transaction: {
+            id: newId(),
+            date,
+            amount: r.amount,
+            desc: r.desc,
+            cat: r.type === 't' ? '' : r.cat,
+            ...(r.sub && r.type !== 't' ? { sub: r.sub } : {}),
+            type: r.type ?? 'e',
+            fixed: 1,
+            tags: 'recurring',
+            ...(r.acc ? { acc: r.acc } : {}),
+            ...(r.type === 't' ? { to: r.to, toAmt: r.amount } : {}),
+            ...(r.reimb ? { reimb: 1 as const } : {}),
+          },
         });
       }
       m++;

@@ -149,15 +149,19 @@ export const budgetInputsHtml = (cats: Categories, budgets: Budgets, kinds: Cate
     .map((c) => `<span>${esc(c)}</span><input inputmode="decimal" data-b="${esc(c)}" value="${budgets[c] || ''}" placeholder="${esc(t('budget.placeholder'))}">`)
     .join('');
 
-export const recurringListHtml = (rules: RecurringExpense[], cats: Categories): string =>
-  rules.length
-    ? rules
-        .map(
-          (r) =>
-            `<div class="row"><span class="dot" style="background:${categoryColor(r.cat, cats)}"></span><div>${esc(r.desc)} <span class="mute">${categoryLabel(r.cat, r.sub)}, ${t('rec.day', { day: r.day })}</span></div><div><b>${eur(r.amount)}</b> <button class="x" data-rdel="${r.id}" aria-label="${esc(t('common.remove'))}">✕</button></div></div>`,
-        )
-        .join('')
-    : `<div class="mute">${t('rec.empty')}</div>`;
+export function recurringListHtml(rules: RecurringExpense[], cats: Categories, accounts: Account[] = []): string {
+  if (!rules.length) return `<div class="mute">${t('rec.empty')}</div>`;
+  const name = (id?: string) => esc(accounts.find((a) => a.id === id)?.name ?? accounts.find((a) => !a.deletedAt)?.name ?? '');
+  const several = accounts.filter((a) => !a.deletedAt).length > 1;
+  return rules
+    .map((r) => {
+      const transfer = r.type === 't';
+      const where = transfer ? `${name(r.acc)} → ${name(r.to)}` : categoryLabel(r.cat, r.sub) + (several ? ` · ${name(r.acc)}` : '');
+      const sign = r.type === 'i' ? '+' : transfer ? '→ ' : '';
+      return `<div class="row"><span class="dot" style="background:${transfer ? TRANSFER_COLOR : categoryColor(r.cat, cats)}"></span><div>${esc(r.desc)} <span class="mute">${where}, ${t('rec.day', { day: r.day })}</span></div><div><b>${sign}${eur(r.amount)}</b> <button class="x" data-rdel="${r.id}" aria-label="${esc(t('common.remove'))}">✕</button></div></div>`;
+    })
+    .join('');
+}
 
 // ---- Accounts ----
 

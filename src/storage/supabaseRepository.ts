@@ -51,12 +51,19 @@ export interface RecurringRow {
   id: string;
   description: string;
   amount: number;
-  category: string;
+  /** null for transfers. */
+  category: string | null;
   subcategory: string;
   day: number;
   /** YYYY-MM-01 */
   start_month: string;
+  type: 'expense' | 'income' | 'transfer';
+  account_id: string | null;
+  to_account_id: string | null;
+  reimbursable: boolean;
 }
+
+const RECURRING_COLUMNS = 'id, description, amount, category, subcategory, day, start_month, type, account_id, to_account_id, reimbursable';
 
 /** PostgREST returns at most this many rows per request. */
 const PAGE = 1000;
@@ -161,20 +168,28 @@ export const ruleFromRow = (r: RecurringRow): RecurringExpense => ({
   id: r.id,
   desc: r.description,
   amount: Number(r.amount),
-  cat: r.category,
+  cat: r.category ?? '',
   ...(r.subcategory ? { sub: r.subcategory } : {}),
   day: r.day,
   start: r.start_month.slice(0, 7),
+  ...(r.type && r.type !== 'expense' ? { type: r.type === 'income' ? ('i' as const) : ('t' as const) } : {}),
+  ...(r.account_id ? { acc: r.account_id } : {}),
+  ...(r.to_account_id ? { to: r.to_account_id } : {}),
+  ...(r.reimbursable ? { reimb: 1 as const } : {}),
 });
 
 export const ruleToRow = (r: RecurringExpense): RecurringRow => ({
   id: r.id,
   description: r.desc,
   amount: r.amount,
-  category: r.cat,
-  subcategory: r.sub || '',
+  category: r.type === 't' ? null : r.cat,
+  subcategory: r.type === 't' ? '' : r.sub || '',
   day: r.day,
   start_month: `${r.start}-01`,
+  type: r.type === 'i' ? 'income' : r.type === 't' ? 'transfer' : 'expense',
+  account_id: r.acc ?? null,
+  to_account_id: r.type === 't' ? (r.to ?? null) : null,
+  reimbursable: (r.type ?? 'e') === 'e' && !!r.reimb,
 });
 
 const isDate = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -208,7 +223,7 @@ export interface ImportPayload {
   budgets?: { category: string; amount: number }[];
   corrections?: { merchant: string; category: string }[];
   keyword_rules?: { keyword: string; category: string }[];
-  recurring?: { source_id: string; description: string; amount: number; category: string; subcategory: string; day: number; start_month: string }[];
+  recurring?: (Omit<RecurringRow, 'id' | 'account_id' | 'to_account_id'> & { source_id: string; account: string; to_account: string })[];
   occurrences?: { recurring_source_id: string; month: string }[];
   accounts?: (Omit<AccountRow, 'id'> & { source_id: string })[];
   links?: { repayment: string; purchase: string; amount: number }[];
@@ -250,15 +265,20 @@ export function toImportPayload(data: Partial<Snapshot>): ImportPayload {
   if (data.rec)
     p.recurring = data.rec
       .filter((r) => r && isAmount(r.amount) && isMonth(r.start) && text(r.desc).trim() && r.day >= 1 && r.day <= 31)
-      .map((r) => ({
-        source_id: String(r.id),
-        description: text(r.desc),
-        amount: r.amount,
-        category: text(r.cat, 100),
-        subcategory: text(r.sub, 100),
-        day: Math.trunc(r.day),
-        start_month: `${r.start}-01`,
-      }));
+      .filter((r) => (r.type === 't' ? !!r.to && r.to !== r.acc : !!r.cat))
+      .map((r) => {
+        const { id: _id, account_id, to_account_id, ...row } = ruleToRow(r);
+        return {
+          ...row,
+          source_id: String(r.id),
+          description: text(r.desc),
+          category: row.category === null ? null : text(row.category, 100),
+          subcategory: text(row.subcategory, 100),
+          day: Math.trunc(r.day),
+          account: account_id ?? '',
+          to_account: to_account_id ?? '',
+        };
+      });
   if (data.gen)
     p.occurrences = Object.keys(data.gen)
       .map(parseGeneratedKey)
@@ -399,7 +419,7 @@ export class SupabaseRepository implements Repository {
 
   async listRecurring(): Promise<RecurringExpense[]> {
     const rows = await this.all<RecurringRow>((from, to) =>
-      this.db.from('recurring_expenses').select('id, description, amount, category, subcategory, day, start_month').order('seq').range(from, to),
+      this.db.from('recurring_expenses').select(RECURRING_COLUMNS).order('seq').range(from, to),
     );
     return rows.map(ruleFromRow);
   }

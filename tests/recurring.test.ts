@@ -101,3 +101,15 @@ describe('generated-month keys', () => {
     }
   });
 });
+
+describe('recurring income and transfers', () => {
+  it('generates entries of the rule type, on its accounts', () => {
+    const salary = { id: 's', desc: 'Salário', amount: 2100, cat: 'Rendimentos', day: 25, start: '2026-11', type: 'i' as const, acc: 'main' };
+    const save = { id: 'p', desc: 'Poupança', amount: 300, cat: '', day: 1, start: '2026-11', type: 't' as const, acc: 'main', to: 'savings' };
+    const out = generateRecurring([salary, save], {}, '2026-11-30', () => 'x');
+    expect(out.map((o) => o.transaction)).toEqual([
+      { id: 'x', date: '2026-11-25', amount: 2100, desc: 'Salário', cat: 'Rendimentos', type: 'i', fixed: 1, tags: 'recurring', acc: 'main' },
+      { id: 'x', date: '2026-11-01', amount: 300, desc: 'Poupança', cat: '', type: 't', fixed: 1, tags: 'recurring', acc: 'main', to: 'savings', toAmt: 300 },
+    ]);
+  });
+});

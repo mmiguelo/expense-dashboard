@@ -82,7 +82,21 @@ describe('toImportPayload', () => {
           deleted_at: null,
         },
       ],
-      recurring: [{ source_id: 'r1', description: 'Gym', amount: 30, category: 'Gym', subcategory: '', day: 31, start_month: '2026-01-01' }],
+      recurring: [
+        {
+          source_id: 'r1',
+          description: 'Gym',
+          amount: 30,
+          category: 'Gym',
+          subcategory: '',
+          day: 31,
+          start_month: '2026-01-01',
+          type: 'expense',
+          reimbursable: false,
+          account: '',
+          to_account: '',
+        },
+      ],
       occurrences: [
         { recurring_source_id: 'r1', month: '2026-01-01' },
         { recurring_source_id: 'r1', month: '2026-02-01' },

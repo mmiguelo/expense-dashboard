@@ -5,7 +5,7 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 import { generateRecurring } from '../src/recurring';
 import { SupabaseAdminRepository } from '../src/storage/supabaseAdminRepository';
 import { SupabaseRepository } from '../src/storage/supabaseRepository';
-import type { Transaction } from '../src/types';
+import type { RecurringExpense, Transaction } from '../src/types';
 import { client, HAVE_DB, signIn, signUp, signUpAdmin, signUpUnconfirmed, sql, type TestUser } from './support/testUsers';
 
 // Runs against a real Supabase with the migrations applied; see tests/support/testUsers.ts
@@ -131,6 +131,23 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
         ['Refund', 'e', -20, m!.id, undefined],
       ]);
       expect(await other.listLinks()).toEqual([{ repayment: imported[2]!.id, purchase: imported[1]!.id, amount: 20 }]);
+    });
+
+    it('generates recurring income and transfers on their accounts', async () => {
+      const r = repoOf(await signUp('recurring'));
+      const [main] = await r.listAccounts();
+      const savings = { ...main!, id: crypto.randomUUID(), name: 'Poupança', kind: 'savings' as const };
+      await r.saveAccount(savings);
+      const salary: RecurringExpense = { id: crypto.randomUUID(), desc: 'Salário', amount: 2000, cat: 'Rendimentos', day: 1, start: '2026-01', type: 'i', acc: main!.id };
+      const save: RecurringExpense = { id: crypto.randomUUID(), desc: 'Poupar', amount: 300, cat: '', day: 2, start: '2026-01', type: 't', acc: main!.id, to: savings.id };
+      await r.saveRecurring(salary);
+      await r.saveRecurring(save);
+      expect(await r.listRecurring()).toEqual([salary, save]);
+      await r.addGeneratedRecurring(generateRecurring([salary, save], {}, '2026-01-31', () => crypto.randomUUID()));
+      expect((await r.listTransactions()).map((x) => [x.desc, x.type, x.amount, x.cat, x.acc, x.to])).toEqual([
+        ['Salário', 'i', 2000, 'Rendimentos', main!.id, undefined],
+        ['Poupar', 't', 300, '', main!.id, savings.id],
+      ]);
     });
 
     it('has subcategories: defaults, add, delete, and on transactions and recurring expenses', async () => {
