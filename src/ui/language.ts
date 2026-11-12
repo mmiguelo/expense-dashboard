@@ -1,7 +1,17 @@
 import { getLang, LANGUAGE_NAMES, t, type Lang } from '../i18n';
 
-// "Idioma" in the account menu: opens the list of languages; choosing one saves it and
-// reloads the page in that language.
+// Choosing a language: "Idioma" in the account menu, and a picker on the landing page.
+// Choosing one saves it and reloads the page in that language.
+
+/** A <select> of the languages, e.g. on the landing page. */
+export function setupLanguageSelect(select: HTMLSelectElement, choose: (lang: Lang) => void): void {
+  select.innerHTML = (Object.keys(LANGUAGE_NAMES) as Lang[])
+    .map((lang) => `<option value="${lang}" lang="${lang}"${lang === getLang() ? ' selected' : ''}>${LANGUAGE_NAMES[lang]}</option>`)
+    .join('');
+  select.addEventListener('change', () => {
+    if (select.value !== getLang()) choose(select.value as Lang);
+  });
+}
 
 export function setupLanguageMenu(doc: Document, choose: (lang: Lang) => void): void {
   const $ = (id: string) => doc.getElementById(id)!;

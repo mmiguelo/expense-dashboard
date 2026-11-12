@@ -11,7 +11,7 @@
 
 <div class="landing" id="auth" hidden>
 <header class="lnav"><span class="lbrand" data-i18n="page.title">Painel de despesas</span>
-<div class="lbtns"><button type="button" data-auth-open="signin" data-i18n="auth.signin.submit">Iniciar sessão</button><button type="button" class="pr" data-auth-open="signup" data-i18n="auth.signup.submit">Criar conta</button></div></header>
+<div class="lbtns"><select class="langsel" id="landingLang" aria-label="Idioma" data-i18n-aria-label="account.language"></select><button type="button" data-auth-open="signin" data-i18n="auth.signin.submit">Iniciar sessão</button><button type="button" class="pr" data-auth-open="signup" data-i18n="auth.signup.submit">Criar conta</button></div></header>
 <div class="lhero">
 <h1 class="ltitle" data-i18n="page.title">Painel de despesas</h1>
 <p class="ltag" data-i18n="landing.tagline">Saiba para onde vai o seu dinheiro.</p>
@@ -67,10 +67,10 @@
 <div id="viewDashboard">
 <section class="card"><h2 id="fT" data-i18n="form.addTitle">Adicionar movimento</h2>
 <div id="f" class="fg">
-<label><span data-i18n="form.type">Tipo</span><select id="type"><option value="e" data-i18n="form.expense">Despesa</option><option value="i" data-i18n="form.income">Receita</option></select></label>
+<label><span data-i18n="form.type">Tipo</span><select id="type"><option value="e" data-i18n="form.expense">Despesa</option><option value="i" data-i18n="form.income">Receita</option><option value="s" data-i18n="form.savings">Poupança</option></select></label>
 <label><span data-i18n="form.date">Data</span><span class="datefield"><input id="date" inputmode="numeric" autocomplete="off" required placeholder="dd/mm/aaaa" data-i18n-placeholder="form.datePlaceholder"><button type="button" class="calbtn" id="dateBtn" aria-label="Escolher no calendário" data-i18n-aria-label="form.pickDate" title="Escolher no calendário" data-i18n-title="form.pickDate"></button><input type="date" id="datePick" tabindex="-1" aria-hidden="true"></span></label>
 <label><span data-i18n="form.amount">Valor (€)</span><input id="amt" inputmode="decimal" required placeholder="0,00"></label>
-<label><span data-i18n="form.description">Descrição</span><input id="desc" autocomplete="off" placeholder="ex.: Mercearia da esquina" data-i18n-placeholder="form.descriptionPlaceholder"></label>
+<label><span data-i18n="form.description">Descrição</span><input id="desc" autocomplete="off" placeholder="ex.: Mercearia" data-i18n-placeholder="form.descriptionPlaceholder"></label>
 <label><span data-i18n="form.category">Categoria</span><select id="cat"></select></label>
 <label><span data-i18n="form.subcategory">Subcategoria</span><select id="subcat"></select></label>
 <label><span data-i18n="form.tags">Etiquetas / notas</span><input id="tags" placeholder="férias, partilhado" data-i18n-placeholder="form.tagsPlaceholder"></label>

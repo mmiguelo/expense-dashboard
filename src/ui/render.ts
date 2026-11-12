@@ -1,5 +1,5 @@
 import type { CategoryRow, Change, HeatmapDay, Merchant, PeriodSummary, QuickPick, TrendBar } from '../analytics';
-import { categoryColor, expenseCategoryNames, INCOME_CATEGORY } from '../categories';
+import { categoryColor, expenseCategoryNames, INCOME_CATEGORY, SAVINGS_CATEGORY } from '../categories';
 import { formatDmy, parseIsoDate } from '../dates';
 import { escapeHtml as esc, formatEur as eur } from '../format';
 import { monthNames, t, tn } from '../i18n';
@@ -17,13 +17,13 @@ export function periodLabel(ref: string, mode: Mode): string {
 
 export const trendTitle = (mode: Mode): string => t(`trend.${mode}`);
 
-/** Expense categories; with `withIncome`, 'Rendimentos' last. */
+/** Expense categories; with `withIncome`, 'Rendimentos' and 'Poupança' last. */
 export const categoryOptions = (cats: Categories, withIncome = false, withAll = false): string =>
   (withAll ? `<option value="">${esc(t('filter.allCategories'))}</option>` : '') +
   expenseCategoryNames(cats)
     .map((c) => `<option>${esc(c)}</option>`)
     .join('') +
-  (withIncome ? `<option>${INCOME_CATEGORY}</option>` : '');
+  (withIncome ? `<option>${INCOME_CATEGORY}</option><option>${SAVINGS_CATEGORY}</option>` : '');
 
 /** A category's subcategories, after a "none" option. */
 export const subcategoryOptions = (names: string[] = []): string =>
@@ -42,7 +42,7 @@ export function summaryHtml(s: PeriodSummary, mode: Mode, vsPrevious: Change | n
   return `<div class="mute">${t(`sum.spent.${mode}`)}</div><div class="total">${eur(s.total)}</div><div class="mute">${previous}</div>
  <div class="stats"><div><b>${s.expenses.length}</b><small>${t('sum.expenses')}</small></div>${mode !== 'day' ? `<div><b>${eur(s.average)}</b><small>${t(mode === 'year' ? 'sum.avgPerMonth' : 'sum.avgPerDay')}</small></div>` : ''}
  ${s.projected !== null ? `<div><b>${eur(s.projected)}</b><small>${t(mode === 'year' ? 'sum.projectedYear' : 'sum.projectedMonth')}</small></div>` : ''}
- <div><b>${eur(s.income)}</b><small>${t('sum.income')}</small></div><div><b class="${s.net < 0 ? 'up' : ''}">${eur(s.net)}</b><small>${t('sum.net')}</small></div>${s.savingsRate !== null ? `<div><b>${s.savingsRate}%</b><small>${t('sum.savingsRate')}</small></div>` : ''}
+ <div><b>${eur(s.income)}</b><small>${t('sum.income')}</small></div>${s.saved ? `<div><b>${eur(s.saved)}</b><small>${t('sum.saved')}</small></div>` : ''}<div><b class="${s.net < 0 ? 'up' : ''}">${eur(s.net)}</b><small>${t('sum.net')}</small></div>${s.savingsRate !== null ? `<div><b>${s.savingsRate}%</b><small>${t('sum.savingsRate')}</small></div>` : ''}
  <div><b>${s.fixedShare}%</b><small>${t('sum.fixed', { amount: eur(s.fixed) })}</small></div><div><b>${eur(s.variable)}</b><small>${t('sum.variable')}</small></div></div>`;
 }
 
@@ -106,7 +106,7 @@ export function transactionListHtml(txs: Transaction[], cats: Categories): strin
   return txs
     .map(
       (x) =>
-        `<div class="row"><span class="dot" style="background:${categoryColor(x.cat, cats)}"></span><div>${esc(x.desc)}<div class="mute">${formatDmy(x.date)}, ${categoryLabel(x.cat, x.sub)}${x.tags ? ', ' + esc(x.tags) : ''}</div></div><div><b>${x.type === 'i' ? '+' : ''}${eur(x.amount)}</b> <button class="x" data-edit="${x.id}" aria-label="${esc(t('common.edit'))}">✎</button><button class="x" data-del="${x.id}" aria-label="${esc(t('common.delete'))}">✕</button></div></div>`,
+        `<div class="row"><span class="dot" style="background:${categoryColor(x.cat, cats)}"></span><div>${esc(x.desc)}<div class="mute">${formatDmy(x.date)}, ${categoryLabel(x.cat, x.sub)}${x.tags ? ', ' + esc(x.tags) : ''}</div></div><div><b>${x.type === 'i' ? '+' : x.type === 's' ? '→ ' : ''}${eur(x.amount)}</b> <button class="x" data-edit="${x.id}" aria-label="${esc(t('common.edit'))}">✎</button><button class="x" data-del="${x.id}" aria-label="${esc(t('common.delete'))}">✕</button></div></div>`,
     )
     .join('');
 }

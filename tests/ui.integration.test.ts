@@ -244,6 +244,20 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     expect((await db.auth.signInWithPassword({ email, password: 'another-password' })).error).toBeNull();
   });
 
+  it('landing page: the language picker reopens the page in the chosen language', async () => {
+    await openPage();
+    const select = $<HTMLSelectElement>('landingLang');
+    expect([...select.options].map((o) => o.value)).toEqual(['pt', 'en', 'es']);
+    expect(select.value).toBe('pt');
+    select.value = 'en';
+    select.dispatchEvent(new Event('change'));
+    expect(localStorage.getItem('lang')).toBe('en');
+    await openPage(); // the reload
+    expect(document.documentElement.lang).toBe('en');
+    expect($<HTMLSelectElement>('landingLang').value).toBe('en');
+    expect(document.querySelector('.ltitle')!.textContent).toBe('Expense dashboard');
+  });
+
   it('language menu: lists the languages and reopens the page in the chosen one', async () => {
     await openPage();
     await signUpThroughForm(newEmail());

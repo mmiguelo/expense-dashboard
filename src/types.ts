@@ -1,8 +1,11 @@
 // Field names are short because they match the persisted format (browser storage key `exp-v2`
 // and JSON backups). Renaming them would break existing data.
 
-/** 'e' = expense, 'i' = income. */
-export type TxType = 'e' | 'i';
+/**
+ * 'e' = expense, 'i' = income, 's' = savings: money moved from the everyday account to a
+ * savings account. Savings are not spending, but they leave the money available to spend.
+ */
+export type TxType = 'e' | 'i' | 's';
 
 export interface Transaction {
   /** UUID. Data from before accounts has numeric ids, read as strings. */
@@ -11,7 +14,7 @@ export interface Transaction {
   date: string;
   amount: number;
   desc: string;
-  /** Category name; always 'Rendimentos' for income ('Income' in old data). */
+  /** Category name; always 'Rendimentos' for income ('Income' in old data) and 'Poupança' for savings. */
   cat: string;
   /** One of the category's subcategories; absent or '' = none. */
   sub?: string;

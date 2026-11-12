@@ -9,6 +9,7 @@ export const sumAmounts = (txs: Transaction[]): number => txs.reduce((s, x) => s
 
 export const expensesOf = (txs: Transaction[]): Transaction[] => txs.filter((x) => x.type === 'e');
 export const incomesOf = (txs: Transaction[]): Transaction[] => txs.filter((x) => x.type === 'i');
+export const savingsOf = (txs: Transaction[]): Transaction[] => txs.filter((x) => x.type === 's');
 
 export const inPeriodOf = (txs: Transaction[], ref: string, mode: Mode): Transaction[] =>
   txs.filter((x) => inPeriod(x.date, ref, mode));
@@ -61,6 +62,8 @@ export interface PeriodSummary {
   expenses: Transaction[];
   total: number;
   income: number;
+  /** Moved to savings in the period. */
+  saved: number;
   previousTotal: number;
   /** Category totals for the period, largest first. */
   categories: [string, number][];
@@ -70,8 +73,9 @@ export interface PeriodSummary {
   /** Average per day (month mode) or per month (year mode). */
   average: number;
   projected: number | null;
+  /** Left of the income after expenses and money moved to savings. */
   net: number;
-  /** Rounded percentage; null without income. */
+  /** Rounded percentage of income not spent (moved to savings or not); null without income. */
   savingsRate: number | null;
   fixed: number;
   /** Rounded percentage of spending from recurring expenses. */
@@ -83,6 +87,7 @@ export function summarize(txs: Transaction[], ref: string, mode: Mode, today: st
   const expenses = inPeriodOf(expensesOf(txs), ref, mode);
   const total = sumAmounts(expenses);
   const income = sumAmounts(inPeriodOf(incomesOf(txs), ref, mode));
+  const saved = sumAmounts(inPeriodOf(savingsOf(txs), ref, mode));
   const previous = inPeriodOf(expensesOf(txs), shiftRef(ref, -1, mode), mode);
   const byCategory = totalsByCategory(expenses);
   const fixed = sumAmounts(expenses.filter((x) => x.fixed));
@@ -91,6 +96,7 @@ export function summarize(txs: Transaction[], ref: string, mode: Mode, today: st
     expenses,
     total,
     income,
+    saved,
     previousTotal: sumAmounts(previous),
     categories: Object.entries(byCategory).sort((a, b) => b[1] - a[1]),
     byCategory,
@@ -98,7 +104,7 @@ export function summarize(txs: Transaction[], ref: string, mode: Mode, today: st
     span,
     average: total / span,
     projected: projectedTotal(total, ref, mode, today),
-    net: income - total,
+    net: income - total - saved,
     savingsRate: income ? Math.round(((income - total) / income) * 100) : null,
     fixed,
     fixedShare: total ? Math.round((fixed / total) * 100) : 0,

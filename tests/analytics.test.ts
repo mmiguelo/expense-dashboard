@@ -89,6 +89,17 @@ describe('summarize: daily, monthly and yearly totals', () => {
     expect(s.fixedShare).toBe(75);
   });
 
+  it('keeps money moved to savings out of spending but takes it off the net balance', () => {
+    const toSavings = tx('2026-03-05', 300, { type: 's', cat: 'Poupança', desc: 'Poupança' });
+    const s = summarize([income('2026-03-01', 1000), tx('2026-03-02', 200), toSavings], '2026-03-01', 'month', '2026-03-20');
+    expect(s.total).toBe(200);
+    expect(s.expenses).toHaveLength(1);
+    expect(s.saved).toBe(300);
+    expect(s.net).toBe(500);
+    expect(s.savingsRate).toBe(80);
+    expect(s.categories.map(([c]) => c)).toEqual(['Groceries']);
+  });
+
   it('has no savings rate without income and 0% fixed without spending', () => {
     const s = summarize([], '2026-03-01', 'month', '2026-03-20');
     expect(s.savingsRate).toBeNull();

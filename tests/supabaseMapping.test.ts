@@ -26,6 +26,9 @@ describe('row mapping', () => {
     const income: Transaction = { ...tx, type: 'i', cat: 'Rendimentos' };
     expect(txToRow(income).type).toBe('income');
     expect(txFromRow(txToRow(income))).toEqual(income);
+    const savings: Transaction = { ...tx, type: 's', cat: 'Poupança' };
+    expect(txToRow(savings).type).toBe('savings');
+    expect(txFromRow(txToRow(savings))).toEqual(savings);
   });
 
   it('reads numeric amounts sent as strings', () => {

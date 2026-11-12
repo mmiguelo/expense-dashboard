@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { INCOME_CATEGORY, normalizeKeyword } from '../categories';
+import { txTypeFromName, txTypeName, type TxTypeName } from '../backup';
+import { fixedCategoryOf, normalizeKeyword } from '../categories';
 import { t } from '../i18n';
 import { generatedKey, parseGeneratedKey } from '../recurring';
 import type {
@@ -25,7 +26,7 @@ export interface TransactionRow {
   id: string;
   date: string;
   amount: number;
-  type: 'expense' | 'income';
+  type: TxTypeName;
   category: string;
   subcategory: string;
   description: string;
@@ -56,7 +57,7 @@ export const txFromRow = (r: TransactionRow): Transaction => ({
   desc: r.description,
   cat: r.category,
   ...(r.subcategory ? { sub: r.subcategory } : {}),
-  type: r.type === 'income' ? 'i' : 'e',
+  type: txTypeFromName(r.type),
   tags: r.tags,
   ...(r.fixed ? { fixed: 1 as const } : {}),
 });
@@ -65,7 +66,7 @@ export const txToRow = (x: Transaction): TransactionRow => ({
   id: x.id,
   date: x.date,
   amount: x.amount,
-  type: x.type === 'i' ? 'income' : 'expense',
+  type: txTypeName(x.type),
   category: x.cat,
   subcategory: x.sub || '',
   description: x.desc,
@@ -183,9 +184,9 @@ export function toImportPayload(data: Partial<Snapshot>): ImportPayload {
         source_id: String(x.id),
         date: x.date,
         amount: x.amount,
-        type: x.type === 'i' ? 'income' : 'expense',
-        // Income is always in 'Rendimentos' (old backups say 'Income').
-        category: x.type === 'i' ? INCOME_CATEGORY : text(x.cat, 100),
+        type: txTypeName(x.type),
+        // Income is always in 'Rendimentos' (old backups say 'Income'), savings in 'Poupança'.
+        category: fixedCategoryOf(x.type) ?? text(x.cat, 100),
         subcategory: text(x.sub, 100),
         description: text(x.desc),
         tags: text(x.tags),

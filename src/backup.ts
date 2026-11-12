@@ -1,4 +1,10 @@
-import type { Snapshot, Transaction } from './types';
+import type { Snapshot, Transaction, TxType } from './types';
+
+/** The name a transaction type has in the database and in CSV exports. */
+export type TxTypeName = 'expense' | 'income' | 'savings';
+
+export const txTypeName = (type: TxType): TxTypeName => (type === 'i' ? 'income' : type === 's' ? 'savings' : 'expense');
+export const txTypeFromName = (name: string): TxType => (name === 'income' ? 'i' : name === 'savings' ? 's' : 'e');
 
 export const CSV_HEADER = 'date,type,amount,category,subcategory,description,tags,fixed';
 
@@ -6,7 +12,7 @@ export function toCsv(transactions: Transaction[]): string {
   const rows = transactions.map((x) =>
     [
       x.date,
-      x.type === 'i' ? 'income' : 'expense',
+      txTypeName(x.type),
       x.amount,
       x.cat,
       '"' + String(x.sub || '').replace(/"/g, '""') + '"',

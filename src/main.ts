@@ -13,7 +13,7 @@ import { setupAccount } from './ui/account';
 import { setupAuthScreen, setupRecoveryScreen } from './ui/auth';
 import { setupFolding } from './ui/folding';
 import { donutSvg, setupLanding } from './ui/landing';
-import { setupLanguageMenu } from './ui/language';
+import { setupLanguageMenu, setupLanguageSelect } from './ui/language';
 import { setupPasswordToggles } from './ui/password';
 import { importMessage, startApp, type AppHandle } from './ui/app';
 
@@ -34,11 +34,13 @@ function main(): void {
   translatePage(document);
   $('spinner').innerHTML = donutSvg();
   setupPasswordToggles(document);
-  setupLanguageMenu(document, (lang) => {
-    // Everything on the page was drawn in the old language: start again in the new one.
+  // Everything on the page was drawn in the old language: start again in the new one.
+  const chooseLanguage = (lang: string) => {
     saveLanguage(lang);
     location.reload();
-  });
+  };
+  setupLanguageMenu(document, chooseLanguage);
+  setupLanguageSelect($('landingLang') as HTMLSelectElement, chooseLanguage);
   setupFolding(document, foldedSections(), saveFoldedSections);
   let supabase: SupabaseClient;
   try {

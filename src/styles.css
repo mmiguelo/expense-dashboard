@@ -82,7 +82,8 @@ details summary{cursor:pointer;font-weight:500}
 .landing{position:relative;height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column}
 .lnav{position:relative;z-index:3;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px clamp(16px,4vw,40px)}
 .lbrand{font:600 18px/1.2 var(--serif)}
-.lbtns{display:flex;gap:8px}
+.lbtns{display:flex;gap:8px;align-items:center}
+.langsel{border-color:var(--line);background:transparent;font-size:13px;padding:7px 8px;cursor:pointer}
 .lhero{position:relative;z-index:2;flex:none;text-align:center;padding:min(7vh,64px) 16px 0}
 .ltitle{font:600 clamp(42px,min(10vw,13vh),132px)/.95 var(--serif);letter-spacing:-.03em;margin:0 auto 18px;max-width:11ch}
 .ltag{max-width:34em;margin:0 auto;color:var(--mute);font-size:clamp(14px,1.6vw,17px)}

@@ -10,7 +10,7 @@ import {
   trendBars,
 } from '../analytics';
 import { toCsv, parseBackup } from '../backup';
-import { expenseCategoryNames, guessCategory, guessSubcategory, INCOME_CATEGORY, isIncomeCategory, missingCategories, nextCategoryColor } from '../categories';
+import { expenseCategoryNames, guessCategory, fixedCategoryOf, guessSubcategory, isIncomeCategory, missingCategories, nextCategoryColor } from '../categories';
 import { formatDmy, parseDmy, shiftRef, toIsoDate } from '../dates';
 import { amountToInput, parseAmount } from '../format';
 import { t, tn, translateError } from '../i18n';
@@ -151,13 +151,13 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     s.disabled = !data.subs[category]?.length;
   }
 
-  /** The form's category select: expense categories, or just 'Rendimentos' for income. */
+  /** The form's category select: expense categories, or the fixed one of income or savings. */
   function fillFormCategories(value = sel('cat').value): void {
-    const income = sel('type').value === 'i';
+    const fixed = fixedCategoryOf(sel('type').value as TxType);
     const c = sel('cat');
-    c.innerHTML = income ? `<option>${html.escape(INCOME_CATEGORY)}</option>` : html.categoryOptions(data.cats);
-    c.disabled = income;
-    if (!income && expenseCategoryNames(data.cats).includes(value)) c.value = value;
+    c.innerHTML = fixed ? `<option>${html.escape(fixed)}</option>` : html.categoryOptions(data.cats);
+    c.disabled = !!fixed;
+    if (!fixed && expenseCategoryNames(data.cats).includes(value)) c.value = value;
     fillSubs('subcat', c.value);
   }
 
@@ -249,7 +249,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     if (!(amount > 0)) return;
     const type = sel('type').value as TxType;
     const desc = $('desc').value.trim();
-    const cat = type === 'i' ? INCOME_CATEGORY : sel('cat').value;
+    const cat = fixedCategoryOf(type) ?? sel('cat').value;
     const sub = sel('subcat').value;
     const fields = { date, amount, desc: desc || sub || cat, cat, sub, type, tags: $('tags').value.trim() };
     let tx: Transaction;
@@ -292,8 +292,9 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
 
   $('desc').addEventListener('input', () => {
     const text = $('desc').value;
-    if (sel('type').value === 'i') {
-      const s = guessSubcategory(text, data.subs, INCOME_CATEGORY);
+    const fixed = fixedCategoryOf(sel('type').value as TxType);
+    if (fixed) {
+      const s = guessSubcategory(text, data.subs, fixed);
       if (s && !subTouched) sel('subcat').value = s.sub;
       return;
     }

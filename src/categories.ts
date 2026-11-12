@@ -1,4 +1,4 @@
-import type { Categories, KeywordRule, LearnedCategories, Subcategories, Transaction } from './types';
+import type { Categories, KeywordRule, LearnedCategories, Subcategories, Transaction, TxType } from './types';
 
 // The categories and keyword rules themselves are data: each account has its own, copied
 // from the defaults an admin manages (tables default_categories and default_keyword_rules).
@@ -7,9 +7,16 @@ import type { Categories, KeywordRule, LearnedCategories, Subcategories, Transac
 export const INCOME_CATEGORY = 'Rendimentos';
 const LEGACY_INCOME_CATEGORY = 'Income';
 const INCOME_COLOR = '#5e8c61';
+/** The category of every savings transaction. */
+export const SAVINGS_CATEGORY = 'Poupança';
+const SAVINGS_COLOR = '#4f7a8c';
 const FALLBACK_COLOR = '#a39b8b';
 
 export const isIncomeCategory = (cat: string): boolean => cat === INCOME_CATEGORY || cat === LEGACY_INCOME_CATEGORY;
+
+/** The fixed category of a transaction type, or null for expenses (which pick one). */
+export const fixedCategoryOf = (type: TxType): string | null =>
+  type === 'i' ? INCOME_CATEGORY : type === 's' ? SAVINGS_CATEGORY : null;
 
 /** Category names an expense can use, in display order. */
 export const expenseCategoryNames = (cats: Categories): string[] => Object.keys(cats).filter((c) => !isIncomeCategory(c));
@@ -18,7 +25,7 @@ export const expenseCategoryNames = (cats: Categories): string[] => Object.keys(
 const CUSTOM_PALETTE = ['#8b6b56', '#7a2e3c', '#6f7442', '#b5643c', '#4f6d7a', '#c2a14d'];
 
 export const categoryColor = (cat: string, cats: Categories): string =>
-  cats[cat] || (isIncomeCategory(cat) ? INCOME_COLOR : FALLBACK_COLOR);
+  cats[cat] || (isIncomeCategory(cat) ? INCOME_COLOR : cat === SAVINGS_CATEGORY ? SAVINGS_COLOR : FALLBACK_COLOR);
 
 /** Suggested colour for the next category added to `cats`. */
 export const nextCategoryColor = (cats: Categories): string =>
