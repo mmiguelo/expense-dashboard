@@ -463,6 +463,44 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     expect(await repo.listLinks()).toEqual([{ repayment: txs[1]!.id, purchase: txs[0]!.id, amount: 20 }]);
   });
 
+  it('adjustments set a balance; deleted entries can be restored', async () => {
+    const email = newEmail();
+    await openPage();
+    await signUpThroughForm(email);
+    type('desc', 'Mercado');
+    type('amt', '30');
+    $('sub').click();
+    await until(() => $('list').textContent!.includes('Mercado'), 'expense listed');
+    expect($('ovBody').textContent).toContain('-30,00');
+
+    // The bank says 120: the adjustment saves the difference, 150.
+    $<HTMLSelectElement>('type').value = 'a';
+    $('type').dispatchEvent(new Event('change'));
+    expect($('amtLabel').textContent).toContain('Saldo correto');
+    expect($('catL').hidden).toBe(true);
+    type('amt', '120');
+    $('sub').click();
+    await until(() => $('list').textContent!.includes('Acerto de saldo'), 'adjustment listed');
+    expect($('ovBody').textContent).toContain('120,00');
+    expect($('sum').textContent).toContain('30,00');
+    const adjustment = (await (await accountRepo(email)).listTransactions()).find((x) => x.type === 'a')!;
+    expect(adjustment.amount).toBe(150);
+
+    // Deleting an entry keeps it, out of every total, until it is restored.
+    const groceries = (await (await accountRepo(email)).listTransactions()).find((x) => x.desc === 'Mercado')!;
+    (document.querySelector(`[data-del="${groceries.id}"]`) as HTMLElement).click();
+    await until(() => !$('list').textContent!.includes('Mercado'), 'expense gone from the list');
+    expect($('ovBody').textContent).toContain('150,00');
+    expect((await (await accountRepo(email)).listTransactions()).find((x) => x.id === groceries.id)!.del).toBeTruthy();
+    openView('settings');
+    expect($('dlist').textContent).toContain('Mercado');
+    (document.querySelector(`[data-trestore="${groceries.id}"]`) as HTMLElement).click();
+    await until(() => !$('dlist').textContent!.includes('Mercado'), 'restored');
+    openView('dashboard');
+    expect($('list').textContent).toContain('Mercado');
+    expect($('ovBody').textContent).toContain('120,00');
+  });
+
   it('settings: sections collapse to their heading, remembered on reload', async () => {
     await openPage();
     await signUpThroughForm(newEmail());

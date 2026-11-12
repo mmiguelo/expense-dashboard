@@ -133,12 +133,13 @@ export function summarize(txs: Transaction[], ref: string, mode: Mode, today: st
  * An account's balance: its opening balance plus every transaction on or after its
  * opening date (earlier ones are already in the opening balance). Income and money
  * arriving by transfer add; spending and money leaving by transfer subtract; money back
- * (a negative expense) adds; adjustments add their signed amount.
+ * (a negative expense) adds; adjustments add their signed amount. With `upTo`
+ * (YYYY-MM-DD), only what happened by the end of that day.
  */
-export function accountBalance(account: Account, txs: Transaction[]): number {
+export function accountBalance(account: Account, txs: Transaction[], upTo?: string): number {
   let n = account.openingBalance;
   for (const x of txs) {
-    if (x.del || x.date < account.openingDate) continue;
+    if (x.del || x.date < account.openingDate || (upTo && x.date > upTo)) continue;
     if (x.acc === account.id) n += x.type === 'i' || x.type === 'a' ? x.amount : -x.amount;
     if (x.type === 't' && x.to === account.id) n += x.toAmt ?? x.amount;
   }

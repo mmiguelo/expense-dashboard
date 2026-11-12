@@ -1,4 +1,5 @@
 import {
+  accountBalance,
   accountDeleteBlocker,
   categoryRows,
   expensesOf,
@@ -19,7 +20,7 @@ import {
 import { toCsv, parseBackup } from '../backup';
 import { categoryNamesOfKind, guessCategory, guessSubcategory, kindOf, missingCategories, nextCategoryColor } from '../categories';
 import { formatDmy, parseDmy, shiftRef, toIsoDate } from '../dates';
-import { amountToInput, parseAmount } from '../format';
+import { amountToInput, currencySymbol, parseAmount } from '../format';
 import { t, tn, translateError } from '../i18n';
 import { generateRecurring } from '../recurring';
 import { lastAccount, saveLastAccount } from '../storage/preferences';
@@ -56,6 +57,8 @@ export interface AppHandle {
   refresh(): Promise<void>;
   /** Show a short message at the bottom of the screen. */
   notify(message: string): void;
+  /** Whether the user has any transactions (they lock the currency). */
+  hasEntries(): boolean;
 }
 
 interface Data {
@@ -218,7 +221,9 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   function applyTypeFields(): void {
     const type = formType();
     $('toL').hidden = type !== 't';
-    $('catL').hidden = $('subL').hidden = type === 't';
+    $('catL').hidden = $('subL').hidden = type === 't' || type === 'a';
+    // An adjustment asks for the balance the account should have; the difference is saved.
+    $('amtLabel').textContent = t(type === 'a' ? 'form.correctBalance' : 'form.amount', { symbol: currencySymbol() });
     $('reimbL').hidden = type !== 'e';
     fillSettle();
   }
@@ -313,6 +318,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     $('rlist').innerHTML = html.recurringListHtml(data.rec, data.cats, data.accounts);
     $('alist').innerHTML = html.accountSettingsHtml(overview(data.accounts, data.txs).balances);
     $('adeleted').innerHTML = html.deletedAccountsHtml(data.accounts.filter((a) => a.deletedAt));
+    $('dlist').innerHTML = html.deletedTransactionsHtml(data.txs);
     const open = new Set([...doc.querySelectorAll<HTMLDetailsElement>('[data-subs]')].filter((d) => d.open).map((d) => d.dataset.subs!));
     $('catList').innerHTML = html.categoryEditorHtml(data.cats, categoryUsage(), data.subs, open, data.kinds);
     renderRules();
@@ -379,7 +385,8 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       $('date').reportValidity();
       return;
     }
-    if (!(amount > 0)) return;
+    const adjust = formType() === 'a';
+    if (adjust ? !Number.isFinite(amount) : !(amount > 0)) return;
     const back = formType() === 'b';
     const type = savedType();
     const settles = back ? Object.entries(shares).filter(([, a]) => a > 0).map(([purchase, a]) => ({ purchase, amount: a })) : [];
@@ -393,10 +400,17 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       sel('toAcc').reportValidity();
       return;
     }
-    const cat = transfer ? '' : sel('cat').value;
-    const sub = transfer ? '' : sel('subcat').value;
+    const cat = transfer || adjust ? '' : sel('cat').value;
+    const sub = transfer || adjust ? '' : sel('subcat').value;
+    let value = back ? -amount : amount;
+    if (adjust) {
+      const account = data.accounts.find((a) => a.id === acc);
+      if (!account) return;
+      value = Math.round((amount - balanceBefore(account, date)) * 100) / 100;
+      if (Math.abs(value) < 0.005) return toast(t('form.adjustNone'));
+    }
     const toName = data.accounts.find((a) => a.id === to)?.name ?? '';
-    const fields = { date, amount: back ? -amount : amount, desc: desc || sub || cat || toName, cat, sub, type, tags: $('tags').value.trim(), acc };
+    const fields = { date, amount: value, desc: desc || sub || cat || (adjust ? t('form.adjustment') : toName), cat, sub, type, tags: $('tags').value.trim(), acc };
     let tx: Transaction;
     if (editId !== null) {
       const existing = data.txs.find((z) => z.id === editId);
@@ -424,12 +438,18 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     );
   }
 
+  /** An account's balance at the end of `date`, leaving out the entry being edited. */
+  const balanceBefore = (account: Account, date: string) => accountBalance(account, data.txs.filter((x) => x.id !== editId), date);
+
   function startEdit(x: Transaction): void {
     editId = x.id;
     const back = x.type === 'e' && x.amount < 0;
     sel('type').value = back ? 'b' : x.type;
     setFormDate(x.date);
-    $('amt').value = amountToInput(Math.abs(x.amount));
+    const account = data.accounts.find((a) => a.id === x.acc);
+    $('amt').value = amountToInput(
+      x.type === 'a' && account ? Math.round((balanceBefore(account, x.date) + x.amount) * 100) / 100 : Math.abs(x.amount),
+    );
     $<HTMLInputElement>('reimb').checked = !!x.reimb;
     shares = Object.fromEntries(data.links.filter((l) => l.repayment === x.id).map((l) => [l.purchase, l.amount]));
     $('desc').value = x.desc;
@@ -556,11 +576,24 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       const x = data.txs.find((t) => String(t.id) === d.del);
       if (!x) return;
       lastDeleted = x;
+      // Soft delete: it stops counting and can be restored from Settings.
       void update(
-        () => repo.deleteTransaction(x.id),
+        () => repo.saveTransaction({ ...x, del: new Date().toISOString() }),
         async () => {
           await render();
           toast(t('tx.deleted'), true);
+        },
+      );
+    }
+    if (d.trestore) {
+      const x = data.txs.find((t) => t.id === d.trestore);
+      if (!x) return;
+      const { del: _del, ...restored } = x;
+      void update(
+        () => repo.saveTransaction(restored),
+        async () => {
+          await render();
+          toast(t('tx.restored'));
         },
       );
     }
@@ -864,7 +897,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   // Categories used by old data but missing from the list get a colour.
   for (const [name, color] of Object.entries(missingCategories(data.txs, data.cats))) await repo.saveCategory(name, color);
   await refresh();
-  return { refresh, notify: (m) => toast(m) };
+  return { refresh, notify: (m) => toast(m), hasEntries: () => data.txs.length > 0 };
 }
 
 export const importMessage = ({ transactions, skipped }: { transactions: number; skipped: number }): string =>

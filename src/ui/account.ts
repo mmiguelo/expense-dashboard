@@ -3,6 +3,7 @@ import { t, translateError } from '../i18n';
 import type { Repository } from '../storage/repository';
 import type { Profile } from '../types';
 import { friendly } from './auth';
+import { currencyOptions } from './render';
 
 // "A minha conta": the signed-in user's name and password.
 
@@ -14,12 +15,37 @@ export interface AccountOptions {
   notify(message: string): void;
   /** After the name changes, so the menu can show it. */
   onNameChanged(name: string): void;
+  /** Whether there are transactions, which lock the currency. */
+  hasEntries(): boolean;
+  /** After the currency changes: everything is drawn again in it. */
+  onCurrencyChanged(): void;
 }
 
-export function setupAccount({ doc, supabase, repo, profile, notify, onNameChanged }: AccountOptions): void {
+export function setupAccount({ doc, supabase, repo, profile, notify, onNameChanged, hasEntries, onCurrencyChanged }: AccountOptions): void {
   const $ = <T extends HTMLElement = HTMLInputElement>(id: string) => doc.getElementById(id) as T;
   $('acctName').value = profile.displayName;
   $('acctEmailField').value = profile.email;
+
+  // The currency: free to change only while there are no entries.
+  const currency = $<HTMLSelectElement>('acctCurrency');
+  currency.innerHTML = currencyOptions(profile.currency);
+  const lock = () => {
+    currency.disabled = hasEntries();
+    $('acctCurrencyHelp').textContent = t(currency.disabled ? 'account.currencyLocked' : 'account.currencyHelp');
+  };
+  lock();
+  doc.querySelector('[data-view="account"]')?.addEventListener('click', lock);
+  currency.addEventListener('change', async () => {
+    try {
+      await repo.updateCurrency(currency.value);
+      notify(t('account.currencySaved'));
+      onCurrencyChanged();
+    } catch (err) {
+      currency.value = profile.currency;
+      notify(translateError((err as Error).message));
+      lock();
+    }
+  });
 
   $<HTMLFormElement>('nameForm').addEventListener('submit', async (e) => {
     e.preventDefault();

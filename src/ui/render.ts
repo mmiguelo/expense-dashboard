@@ -1,8 +1,8 @@
 import type { AccountBalance, CategoryRow, Change, HeatmapDay, Merchant, Overview, PeriodSummary, QuickPick, TrendBar } from '../analytics';
 import { categoryColor, categoryNamesOfKind, expenseCategoryNames } from '../categories';
 import { formatDmy, parseIsoDate } from '../dates';
-import { amountToInput, escapeHtml as esc, formatEur as eur } from '../format';
-import { monthNames, t, tn } from '../i18n';
+import { amountToInput, CURRENCIES, currencySymbol, escapeHtml as esc, formatEur as eur } from '../format';
+import { getLang, monthNames, t, tn } from '../i18n';
 import type { Account, Budgets, Categories, CategoryKind, CategoryKinds, KeywordRule, Mode, RecurringExpense, Subcategories, Transaction } from '../types';
 import type { Outstanding } from '../analytics';
 
@@ -133,10 +133,15 @@ export function transactionListHtml(
     .map((x) => {
       const transfer = x.type === 't';
       const back = x.type === 'e' && x.amount < 0;
+      const adjust = x.type === 'a';
       const reimb = x.reimb ? ` · ${x.id in owed ? t('list.owed', { amount: eur(owed[x.id]!) }) : t('list.settled')}` : '';
-      const where = transfer ? `${name(x.acc)} → ${name(x.to)}` : categoryLabel(x.cat, x.sub) + (several ? ` · ${name(x.acc)}` : '') + reimb;
-      const sign = x.type === 'i' ? '+' : transfer ? '→ ' : back ? '↩ +' : '';
-      return `<div class="row"><span class="dot" style="background:${transfer ? TRANSFER_COLOR : categoryColor(x.cat, cats)}"></span><div>${esc(x.desc)}<div class="mute">${formatDmy(x.date)}, ${where}${x.tags ? ', ' + esc(x.tags) : ''}</div></div><div><b>${sign}${eur(Math.abs(x.amount))}</b> <button class="x" data-edit="${x.id}" aria-label="${esc(t('common.edit'))}">✎</button><button class="x" data-del="${x.id}" aria-label="${esc(t('common.delete'))}">✕</button></div></div>`;
+      const where = transfer
+        ? `${name(x.acc)} → ${name(x.to)}`
+        : adjust
+          ? `${t('form.adjustment')} · ${name(x.acc)}`
+          : categoryLabel(x.cat, x.sub) + (several ? ` · ${name(x.acc)}` : '') + reimb;
+      const sign = x.type === 'i' ? '+' : transfer ? '→ ' : back ? '↩ +' : adjust ? (x.amount > 0 ? '⚖ +' : '⚖ −') : '';
+      return `<div class="row"><span class="dot" style="background:${transfer || adjust ? TRANSFER_COLOR : categoryColor(x.cat, cats)}"></span><div>${esc(x.desc)}<div class="mute">${formatDmy(x.date)}, ${where}${x.tags ? ', ' + esc(x.tags) : ''}</div></div><div><b>${sign}${eur(Math.abs(x.amount))}</b> <button class="x" data-edit="${x.id}" aria-label="${esc(t('common.edit'))}">✎</button><button class="x" data-del="${x.id}" aria-label="${esc(t('common.delete'))}">✕</button></div></div>`;
     })
     .join('');
 }
@@ -146,7 +151,7 @@ export const quickPicksHtml = (picks: QuickPick[]): string =>
 
 export const budgetInputsHtml = (cats: Categories, budgets: Budgets, kinds: CategoryKinds = {}): string =>
   expenseCategoryNames(cats, kinds)
-    .map((c) => `<span>${esc(c)}</span><input inputmode="decimal" data-b="${esc(c)}" value="${budgets[c] || ''}" placeholder="${esc(t('budget.placeholder'))}">`)
+    .map((c) => `<span>${esc(c)}</span><input inputmode="decimal" data-b="${esc(c)}" value="${budgets[c] || ''}" placeholder="${esc(t('budget.placeholder', { symbol: currencySymbol() }))}">`)
     .join('');
 
 export function recurringListHtml(rules: RecurringExpense[], cats: Categories, accounts: Account[] = []): string {
@@ -160,6 +165,32 @@ export function recurringListHtml(rules: RecurringExpense[], cats: Categories, a
       const sign = r.type === 'i' ? '+' : transfer ? '→ ' : '';
       return `<div class="row"><span class="dot" style="background:${transfer ? TRANSFER_COLOR : categoryColor(r.cat, cats)}"></span><div>${esc(r.desc)} <span class="mute">${where}, ${t('rec.day', { day: r.day })}</span></div><div><b>${sign}${eur(r.amount)}</b> <button class="x" data-rdel="${r.id}" aria-label="${esc(t('common.remove'))}">✕</button></div></div>`;
     })
+    .join('');
+}
+
+/** Currencies, by code with their name in the page's language; `selected` first chosen. */
+export function currencyOptions(selected = 'EUR'): string {
+  let names: Intl.DisplayNames | null = null;
+  try {
+    names = new Intl.DisplayNames([getLang()], { type: 'currency' });
+  } catch {
+    // Older browsers: codes only.
+  }
+  const codes = CURRENCIES.includes(selected) ? CURRENCIES : [selected, ...CURRENCIES];
+  return codes
+    .map((c) => `<option value="${c}"${c === selected ? ' selected' : ''}>${c}${names ? ` — ${esc(names.of(c) ?? '')}` : ''}</option>`)
+    .join('');
+}
+
+/** Soft-deleted transactions, most recently deleted first, each with a restore button. */
+export function deletedTransactionsHtml(txs: Transaction[]): string {
+  const deleted = txs.filter((x) => x.del).sort((a, b) => b.del!.localeCompare(a.del!));
+  if (!deleted.length) return `<div class="mute">${t('settings.deletedEmpty')}</div>`;
+  return deleted
+    .map(
+      (x) =>
+        `<div class="row" style="grid-template-columns:1fr auto auto"><div>${esc(x.desc)}<div class="mute">${formatDmy(x.date)}${x.cat ? `, ${categoryLabel(x.cat, x.sub)}` : ''}</div></div><b>${eur(Math.abs(x.amount))}</b><button type="button" data-trestore="${x.id}">${t('acc.restore')}</button></div>`,
+    )
     .join('');
 }
 

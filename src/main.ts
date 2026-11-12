@@ -16,6 +16,7 @@ import { donutSvg, setupLanding } from './ui/landing';
 import { setupLanguageMenu, setupLanguageSelect } from './ui/language';
 import { setupPasswordToggles } from './ui/password';
 import { importMessage, startApp, type AppHandle } from './ui/app';
+import { setCurrency } from './format';
 
 const SCREENS = ['loading', 'configError', 'auth', 'recovery', 'deactivated', 'app'] as const;
 type Screen = (typeof SCREENS)[number];
@@ -102,6 +103,9 @@ async function startSignedIn(supabase: SupabaseClient, session: Session): Promis
   const repo = new SupabaseRepository(supabase, session.user.id);
   const profile = await repo.getProfile();
   if (!profile.active) return showDeactivated(profile);
+  // Amounts and labels in the user's currency.
+  setCurrency(profile.currency);
+  translatePage(document);
 
   showAccount(profile);
   let deactivated = false;
@@ -122,7 +126,16 @@ async function startSignedIn(supabase: SupabaseClient, session: Session): Promis
     await admin.refresh();
   });
   $('adminNav').hidden = profile.role !== 'admin';
-  setupAccount({ doc: document, supabase, repo, profile, notify: app.notify, onNameChanged: (name) => showAccount({ ...profile, displayName: name }) });
+  setupAccount({
+    doc: document,
+    supabase,
+    repo,
+    profile,
+    notify: app.notify,
+    onNameChanged: (name) => showAccount({ ...profile, displayName: name }),
+    hasEntries: app.hasEntries,
+    onCurrencyChanged: () => location.reload(),
+  });
 
   // Coming back to the tab: pick up changes from other devices, and deactivation.
   document.addEventListener('visibilitychange', () => {

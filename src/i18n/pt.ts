@@ -58,7 +58,7 @@ export const pt = {
   'form.datePlaceholder': 'dd/mm/aaaa',
   'form.pickDate': 'Escolher no calendário',
   'form.badDate': 'Data inválida. Use o formato dd/mm/aaaa.',
-  'form.amount': 'Valor (€)',
+  'form.amount': 'Valor ({symbol})',
   'form.description': 'Descrição',
   'form.descriptionPlaceholder': 'ex.: Mercearia',
   'form.category': 'Categoria',
@@ -100,7 +100,7 @@ export const pt = {
   'settings.keywordPlaceholder': 'ex.: veterinário',
   'settings.addRule': 'Adicionar regra',
   'settings.filterRules': 'Filtrar regras…',
-  'settings.budgets': 'Orçamento mensal por categoria (€, vazio = sem orçamento)',
+  'settings.budgets': 'Orçamento mensal por categoria ({symbol}, vazio = sem orçamento)',
   'settings.recurring': 'Movimentos fixos mensais',
   'settings.dayOfMonth': 'Dia do mês',
   'settings.addRecurring': 'Adicionar movimento fixo',
@@ -173,7 +173,7 @@ export const pt = {
   'tx.deleted': 'Movimento apagado',
 
   // ---- settings ----
-  'budget.placeholder': '€ / mês',
+  'budget.placeholder': '{symbol} / mês',
   'rec.day': 'dia {day}',
   'rec.empty': 'Ainda sem movimentos fixos. Adicione uma vez o salário, a renda, o seguro ou a transferência mensal para a poupança.',
   'cat.colourOf': 'Cor de {name}',
@@ -348,6 +348,18 @@ export const pt = {
   'cat.incomes': 'Receitas',
   'cat.kindLabel': 'Tipo',
   'cat.lastOfKind': 'É a sua última categoria deste tipo: não pode ser eliminada.',
+  'account.currency': 'Moeda',
+  'account.currencyHelp': 'A moeda em que regista e vê os valores. Mudá-la não converte valores, por isso só é possível enquanto não tiver movimentos.',
+  'account.currencyLocked': 'Já tem movimentos registados nesta moeda, por isso ela não pode mudar: os valores não seriam convertidos.',
+  'account.currencySaved': 'Moeda alterada.',
+  'auth.currency': 'Moeda',
+  'form.adjustment': 'Acerto de saldo',
+  'form.correctBalance': 'Saldo correto ({symbol})',
+  'form.adjustNone': 'O saldo dessa conta nessa data já é esse.',
+  'settings.deleted': 'Movimentos eliminados',
+  'settings.deletedHelp': 'Os movimentos eliminados deixam de contar, mas ficam aqui para os poder restaurar.',
+  'settings.deletedEmpty': 'Nenhum movimento eliminado.',
+  'tx.restored': 'Movimento restaurado.',
 } as const;
 
 export type MessageKey = keyof typeof pt;

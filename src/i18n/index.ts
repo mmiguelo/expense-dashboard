@@ -1,6 +1,7 @@
 import { en } from './en';
 import { es } from './es';
 import { pt, type MessageKey } from './pt';
+import { currencySymbol } from '../format';
 
 // Every text the user sees comes from here. Portuguese is the default; add a language by
 // adding a dictionary with the same keys as pt.ts and listing it in LANGUAGES.
@@ -51,9 +52,10 @@ export const monthNames = (): string[] => t('months').split(',');
 export function translatePage(doc: Document): void {
   doc.documentElement.lang = current;
   doc.title = t('page.title');
-  doc.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => (el.textContent = t(el.dataset.i18n as MessageKey)));
+  const params = { symbol: currencySymbol() };
+  doc.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => (el.textContent = t(el.dataset.i18n as MessageKey, params)));
   for (const attr of ['placeholder', 'aria-label', 'title'] as const) {
-    doc.querySelectorAll<HTMLElement>(`[data-i18n-${attr}]`).forEach((el) => el.setAttribute(attr, t(el.getAttribute(`data-i18n-${attr}`) as MessageKey)));
+    doc.querySelectorAll<HTMLElement>(`[data-i18n-${attr}]`).forEach((el) => el.setAttribute(attr, t(el.getAttribute(`data-i18n-${attr}`) as MessageKey, params)));
   }
 }
 
@@ -77,6 +79,7 @@ export function translateError(message: string): string {
   if (/own role/.test(message)) return t('admin.err.ownRole');
   if (/deactivate your own/.test(message)) return t('admin.err.ownDeactivate');
   if (/This is your last (expense|income) category/.test(message)) return t('cat.lastOfKind');
+  if (/currency cannot change/.test(message)) return t('account.currencyLocked');
   if (/Archive it instead/.test(message)) return t('acc.blocked.transfers');
   if (/at least one open account/.test(message)) return t('acc.blocked.last');
   if (/duplicate key/.test(message)) return t('db.duplicate');

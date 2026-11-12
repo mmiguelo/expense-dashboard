@@ -417,3 +417,13 @@ describe('reimbursements', () => {
     expect(allocate(30.3, [10.1, 10.1, 50])).toEqual([10.1, 10.1, 10.1]);
   });
 });
+
+describe('balance on a date', () => {
+  it('counts only what happened by the end of that day', () => {
+    const acc: Account = { id: 'a', name: 'a', kind: 'checking', currency: 'EUR', openingBalance: 100, openingDate: '2026-03-01', institution: '', archived: false };
+    const txs = [tx('2026-03-02', 10, { acc: 'a' }), tx('2026-03-05', 20, { acc: 'a' })];
+    expect(accountBalance(acc, txs, '2026-03-02')).toBe(90);
+    expect(accountBalance(acc, txs, '2026-03-04')).toBe(90);
+    expect(accountBalance(acc, txs)).toBe(70);
+  });
+});

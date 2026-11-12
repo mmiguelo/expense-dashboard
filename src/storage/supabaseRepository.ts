@@ -359,6 +359,12 @@ export class SupabaseRepository implements Repository {
     return profileFromRow(data);
   }
 
+  async updateCurrency(code: string): Promise<void> {
+    const { data, error } = await this.db.from('profiles').update({ currency: code }).eq('id', this.userId).select('id');
+    if (error) throw toError(error);
+    if (!data?.length) throw new Error(t('admin.err.notAllowed'));
+  }
+
   async updateDisplayName(name: string): Promise<void> {
     const { data, error } = await this.db.from('profiles').update({ display_name: name }).eq('id', this.userId).select('id');
     if (error) throw toError(error);

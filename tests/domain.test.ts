@@ -156,3 +156,14 @@ describe('dd/mm/yyyy dates', () => {
     expect(parseDmy(formatDmy('2026-01-31'))).toBe('2026-01-31');
   });
 });
+
+describe('currency', () => {
+  it('formats amounts and labels in the chosen currency', async () => {
+    const { currencySymbol, formatEur, setCurrency } = await import('../src/format');
+    expect(currencySymbol('EUR')).toBe('€');
+    setCurrency('USD');
+    expect(formatEur(12.5)).toContain('US$');
+    setCurrency('EUR');
+    expect(formatEur(12.5)).toContain('€');
+  });
+});

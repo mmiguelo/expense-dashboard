@@ -6,7 +6,7 @@ import { generateRecurring } from '../src/recurring';
 import { SupabaseAdminRepository } from '../src/storage/supabaseAdminRepository';
 import { SupabaseRepository } from '../src/storage/supabaseRepository';
 import type { RecurringExpense, Transaction } from '../src/types';
-import { client, HAVE_DB, signIn, signUp, signUpAdmin, signUpUnconfirmed, sql, type TestUser } from './support/testUsers';
+import { client, confirmEmail, HAVE_DB, newEmail, PASSWORD, signIn, signUp, signUpAdmin, signUpUnconfirmed, sql, type TestUser } from './support/testUsers';
 
 // Runs against a real Supabase with the migrations applied; see tests/support/testUsers.ts
 // and the README for the variables. Skipped without them.
@@ -131,6 +131,21 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
         ['Refund', 'e', -20, m!.id, undefined],
       ]);
       expect(await other.listLinks()).toEqual([{ repayment: imported[2]!.id, purchase: imported[1]!.id, amount: 20 }]);
+    });
+
+    it('takes the currency chosen at sign-up, and lets it change only before any entry', async () => {
+      const email = newEmail('currency');
+      const { data, error } = await client().auth.signUp({ email, password: PASSWORD, options: { data: { currency: 'USD' } } });
+      expect(error).toBeNull();
+      await confirmEmail(email);
+      const r = new SupabaseRepository(await signIn(email), data.user!.id);
+      expect((await r.getProfile()).currency).toBe('USD');
+      expect((await r.listAccounts())[0]!.currency).toBe('USD');
+      await r.updateCurrency('GBP');
+      expect((await r.getProfile()).currency).toBe('GBP');
+      expect((await r.listAccounts())[0]!.currency).toBe('GBP');
+      await r.saveTransaction(tx({ amount: 5 }));
+      await expect(r.updateCurrency('EUR')).rejects.toThrow(/currency cannot change/);
     });
 
     it('generates recurring income and transfers on their accounts', async () => {

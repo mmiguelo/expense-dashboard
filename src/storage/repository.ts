@@ -32,6 +32,8 @@ export interface Repository {
   getProfile(): Promise<Profile>;
   /** The name shown for this account (up to 100 characters; may be empty). */
   updateDisplayName(name: string): Promise<void>;
+  /** Refused once there are transactions: amounts aren't converted. */
+  updateCurrency(code: string): Promise<void>;
 
   /** Every account, including archived and soft-deleted ones, in the order added. */
   listAccounts(): Promise<Account[]>;

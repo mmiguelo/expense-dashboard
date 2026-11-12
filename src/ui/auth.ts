@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { t } from '../i18n';
+import { currencyOptions } from './render';
 
 type AuthMode = 'signin' | 'signup' | 'reset';
 
@@ -85,6 +86,7 @@ export function setupAuthScreen(doc: Document, supabase: SupabaseClient): (mode:
     $('authMsg').className = `authmsg ${kind}`;
   };
   const offerResend = (show: boolean) => ($('authResendRow').hidden = !show);
+  $('authCurrency').innerHTML = currencyOptions();
 
   const setMode = (m: AuthMode) => {
     mode = m;
@@ -93,6 +95,7 @@ export function setupAuthScreen(doc: Document, supabase: SupabaseClient): (mode:
     cooldowns.paint();
     $('authSwitch').textContent = c.switchTo();
     $('authPassLabel').hidden = !c.password;
+    $('authCurrencyLabel').hidden = m !== 'signup';
     $('authPass').autocomplete = m === 'signup' ? 'new-password' : 'current-password';
     $('authForgot').hidden = m !== 'signin';
     message('');
@@ -122,7 +125,8 @@ export function setupAuthScreen(doc: Document, supabase: SupabaseClient): (mode:
         if (error) throw error;
         wait = 0;
       } else if (attempt === 'signup') {
-        const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: pageUrl(doc) } });
+        const currency = $<HTMLSelectElement>('authCurrency').value;
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: pageUrl(doc), data: { currency } } });
         if (error) throw error;
         // Email confirmation is required, so there is no session until the link is opened.
         if (!data.session) {
