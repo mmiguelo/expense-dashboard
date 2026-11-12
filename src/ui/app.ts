@@ -15,8 +15,10 @@ import { formatDmy, parseDmy, shiftRef, toIsoDate } from '../dates';
 import { amountToInput, parseAmount } from '../format';
 import { t, tn, translateError } from '../i18n';
 import { generateRecurring } from '../recurring';
+import { lastAccount, saveLastAccount } from '../storage/preferences';
 import type { Repository } from '../storage/repository';
 import type {
+  Account,
   Budgets,
   Categories,
   GeneratedMonths,
@@ -47,6 +49,7 @@ export interface AppHandle {
 }
 
 interface Data {
+  accounts: Account[];
   txs: Transaction[];
   rec: RecurringExpense[];
   bud: Budgets;
@@ -70,7 +73,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   const formDate = () => parseDmy($('date').value);
   const newId = () => crypto.randomUUID();
 
-  let data: Data = { txs: [], rec: [], bud: {}, cats: {}, subs: {}, learn: {}, gen: {}, rules: [] };
+  let data: Data = { accounts: [], txs: [], rec: [], bud: {}, cats: {}, subs: {}, learn: {}, gen: {}, rules: [] };
   let mode: Mode = 'month';
   let ref = today();
   /** The user picked a category by hand, so stop auto-guessing it. */
@@ -84,8 +87,9 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   let deleting: string | null = null;
 
   async function load(): Promise<void> {
-    const [profile, txs, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
+    const [profile, accounts, txs, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
       repo.getProfile(),
+      repo.listAccounts(),
       repo.listTransactions(),
       repo.listRecurring(),
       repo.getBudgets(),
@@ -100,7 +104,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       onDeactivated?.();
       throw new Error(t('err.deactivated'));
     }
-    data = { txs, rec, bud, cats, subs, learn, gen, rules };
+    data = { accounts, txs, rec, bud, cats, subs, learn, gen, rules };
   }
 
   async function generateDueRecurring(): Promise<void> {
@@ -161,6 +165,32 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     fillSubs('subcat', c.value);
   }
 
+  /** Accounts that can take new entries: not archived, not deleted. */
+  const openAccounts = () => data.accounts.filter((a) => !a.archived && !a.deletedAt);
+
+  /**
+   * The form's Account and To fields: shown only with more than one account, and Transfer
+   * only offered then. Keeps the selected accounts when they are still there.
+   */
+  function fillAccounts(acc = sel('acc').value, to = sel('toAcc').value): void {
+    const open = openAccounts();
+    const ids = open.map((a) => a.id);
+    sel('acc').innerHTML = sel('toAcc').innerHTML = html.accountOptions(open);
+    const remembered = lastAccount();
+    sel('acc').value = ids.includes(acc) ? acc : remembered && ids.includes(remembered) ? remembered : (ids[0] ?? '');
+    sel('toAcc').value = ids.includes(to) && to !== sel('acc').value ? to : (ids.find((id) => id !== sel('acc').value) ?? '');
+    $('accL').hidden = open.length < 2;
+    sel('type').querySelector<HTMLOptionElement>('option[value="t"]')!.hidden = open.length < 2;
+    applyTypeFields();
+  }
+
+  /** Transfers have a To account and no category. */
+  function applyTypeFields(): void {
+    const transfer = sel('type').value === 't';
+    $('toL').hidden = !transfer;
+    $('catL').hidden = $('subL').hidden = transfer;
+  }
+
   function fillSelects(): void {
     const selects = [sel('fc'), sel('rc'), sel('kwNewCat')];
     const values = selects.map((s) => s.value);
@@ -171,12 +201,13 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       if (values[i]) s.value = values[i]!;
     });
     fillFormCategories();
+    fillAccounts();
     fillSubs('rsub', sel('rc').value);
   }
 
   function renderList(): void {
     const list = searchTransactions(data.txs, ref, mode, $('q').value, sel('fc').value);
-    $('list').innerHTML = html.transactionListHtml(list, data.cats);
+    $('list').innerHTML = html.transactionListHtml(list, data.cats, data.accounts);
   }
 
   function renderSettings(): void {
@@ -207,7 +238,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   async function render(): Promise<void> {
     await generateDueRecurring();
     fillSelects();
-    const s = summarize(data.txs, ref, mode, today());
+    const s = summarize(data.txs, ref, mode, today(), data.accounts);
     $('lbl').textContent = html.periodLabel(ref, mode);
     $('sum').innerHTML = html.summaryHtml(s, mode, percentChange(s.total, s.previousTotal));
     $('tT').textContent = html.trendTitle(mode);
@@ -232,6 +263,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     sel('type').value = 'e';
     setFormDate(ref);
     fillFormCategories();
+    fillAccounts('', '');
     fillSubs('subcat', sel('cat').value, '');
     $('sub').textContent = t('form.add');
     $('cancel').hidden = true;
@@ -249,21 +281,33 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     if (!(amount > 0)) return;
     const type = sel('type').value as TxType;
     const desc = $('desc').value.trim();
-    const cat = fixedCategoryOf(type) ?? sel('cat').value;
-    const sub = sel('subcat').value;
-    const fields = { date, amount, desc: desc || sub || cat, cat, sub, type, tags: $('tags').value.trim() };
+    const acc = sel('acc').value;
+    const transfer = type === 't';
+    const to = sel('toAcc').value;
+    if (transfer && (!to || to === acc)) {
+      sel('toAcc').setCustomValidity(t('form.sameAccount'));
+      sel('toAcc').reportValidity();
+      return;
+    }
+    const cat = transfer ? '' : (fixedCategoryOf(type) ?? sel('cat').value);
+    const sub = transfer ? '' : sel('subcat').value;
+    const toName = data.accounts.find((a) => a.id === to)?.name ?? '';
+    const fields = { date, amount, desc: desc || sub || cat || toName, cat, sub, type, tags: $('tags').value.trim(), acc };
     let tx: Transaction;
     if (editId !== null) {
       const existing = data.txs.find((z) => z.id === editId);
       if (!existing) return;
-      tx = { ...existing, ...fields };
+      const { to: _to, toAmt: _toAmt, ...rest } = existing;
+      tx = { ...rest, ...fields };
     } else tx = { id: newId(), ...fields };
+    if (transfer) Object.assign(tx, { to, toAmt: amount });
     const learn = type === 'e' && desc && touched;
     // On failure the form keeps what was typed, so it can be submitted again.
     await update(
       async () => {
         if (learn) await repo.learnCategory(desc, cat);
         await repo.saveTransaction(tx);
+        saveLastAccount(acc);
       },
       () => {
         ref = fields.date;
@@ -282,6 +326,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     $('tags').value = x.tags || '';
     fillFormCategories(x.cat);
     fillSubs('subcat', sel('cat').value, x.sub || '');
+    fillAccounts(x.acc ?? '', x.to ?? '');
     touched = false;
     subTouched = false;
     $('sub').textContent = t('form.save');
@@ -292,6 +337,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
 
   $('desc').addEventListener('input', () => {
     const text = $('desc').value;
+    if (sel('type').value === 't') return;
     const fixed = fixedCategoryOf(sel('type').value as TxType);
     if (fixed) {
       const s = guessSubcategory(text, data.subs, fixed);
@@ -323,7 +369,10 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   sel('type').addEventListener('change', () => {
     subTouched = false;
     fillFormCategories();
+    applyTypeFields();
   });
+  sel('acc').addEventListener('change', () => fillAccounts());
+  sel('toAcc').addEventListener('change', () => sel('toAcc').setCustomValidity(''));
   sel('rc').addEventListener('change', () => fillSubs('rsub', sel('rc').value, ''));
   $('cancel').addEventListener('click', resetForm);
   $('sub').addEventListener('click', () => void submitTransaction());
@@ -414,6 +463,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     if (d.chip) {
       const c = JSON.parse(d.chip);
       sel('type').value = 'e';
+      applyTypeFields();
       $('desc').value = c.desc;
       fillFormCategories(c.cat);
       fillSubs('subcat', sel('cat').value, c.sub || '');
@@ -562,7 +612,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     'click',
     exporting(async () => download('expenses-backup.json', JSON.stringify(await repo.exportSnapshot()), 'application/json')),
   );
-  $('xc').addEventListener('click', exporting(async () => download('expenses.csv', toCsv(await repo.listTransactions()), 'text/csv')));
+  $('xc').addEventListener('click', exporting(async () => download('expenses.csv', toCsv(await repo.listTransactions(), await repo.listAccounts()), 'text/csv')));
 
   /** Read the backup picked in a file input; alerts and returns null if it isn't one. */
   async function pickedBackup(e: Event) {

@@ -28,12 +28,21 @@ export interface TransactionRow {
   date: string;
   amount: number;
   type: TxTypeName;
-  category: string;
+  /** null for transfers and adjustments. */
+  category: string | null;
   subcategory: string;
   description: string;
   tags: string;
   fixed: boolean;
+  account_id: string;
+  to_account_id: string | null;
+  to_amount: number | null;
+  reimbursable: boolean;
+  deleted_at: string | null;
 }
+
+const TX_COLUMNS =
+  'id, date, amount, type, category, subcategory, description, tags, fixed, account_id, to_account_id, to_amount, reimbursable, deleted_at';
 
 export interface RecurringRow {
   id: string;
@@ -56,23 +65,35 @@ export const txFromRow = (r: TransactionRow): Transaction => ({
   date: r.date,
   amount: Number(r.amount),
   desc: r.description,
-  cat: r.category,
+  cat: r.category ?? '',
   ...(r.subcategory ? { sub: r.subcategory } : {}),
   type: txTypeFromName(r.type),
   tags: r.tags,
   ...(r.fixed ? { fixed: 1 as const } : {}),
+  acc: r.account_id,
+  ...(r.to_account_id ? { to: r.to_account_id, toAmt: Number(r.to_amount ?? r.amount) } : {}),
+  ...(r.reimbursable ? { reimb: 1 as const } : {}),
+  ...(r.deleted_at ? { del: r.deleted_at } : {}),
 });
+
+/** Transfers and adjustments have no category. */
+const hasCategory = (type: Transaction['type']) => type === 'e' || type === 'i';
 
 export const txToRow = (x: Transaction): TransactionRow => ({
   id: x.id,
   date: x.date,
   amount: x.amount,
   type: txTypeName(x.type),
-  category: x.cat,
-  subcategory: x.sub || '',
+  category: hasCategory(x.type) ? x.cat : null,
+  subcategory: hasCategory(x.type) ? x.sub || '' : '',
   description: x.desc,
   tags: x.tags || '',
   fixed: !!x.fixed,
+  account_id: x.acc!,
+  to_account_id: x.type === 't' ? x.to! : null,
+  to_amount: x.type === 't' ? (x.toAmt ?? x.amount) : null,
+  reimbursable: !!x.reimb,
+  deleted_at: x.del ?? null,
 });
 
 export interface ProfileRow {
@@ -156,6 +177,25 @@ export const ruleToRow = (r: RecurringExpense): RecurringRow => ({
 const isDate = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const isMonth = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}$/.test(s);
 const isAmount = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0;
+const isNonZero = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n !== 0;
+const ACCOUNT_KINDS: string[] = ['checking', 'savings', 'restricted', 'credit'];
+
+/** Rows the database would accept: income and transfers are positive, expenses and adjustments non-zero. */
+function isImportable(x: Transaction | undefined): x is Transaction {
+  if (!x || !isDate(x.date)) return false;
+  switch (x.type) {
+    case 'i':
+      return isAmount(x.amount) && !!x.cat;
+    case 'e':
+      return isNonZero(x.amount) && !!x.cat;
+    case 't':
+      return isAmount(x.amount) && !!x.to && x.to !== x.acc;
+    case 'a':
+      return isNonZero(x.amount);
+    default:
+      return false;
+  }
+}
 const text = (s: unknown, max = MAX_TEXT) => String(s ?? '').slice(0, max);
 const color = (c: unknown) => (typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c) ? c : FALLBACK_COLOR);
 
@@ -167,8 +207,12 @@ export interface ImportPayload {
   keyword_rules?: { keyword: string; category: string }[];
   recurring?: { source_id: string; description: string; amount: number; category: string; subcategory: string; day: number; start_month: string }[];
   occurrences?: { recurring_source_id: string; month: string }[];
-  transactions?: (Omit<TransactionRow, 'id'> & { source_id: string })[];
+  accounts?: (Omit<AccountRow, 'id'> & { source_id: string })[];
+  transactions?: (Omit<TransactionRow, 'id' | 'account_id' | 'to_account_id'> & { source_id: string; account: string; to_account: string })[];
 }
+
+/** Old backups (a few days in November 2026) had a 'savings' type with no account. */
+const LEGACY_SAVINGS_ACCOUNT = 'legacy-savings';
 
 /**
  * Convert a backup (localStorage data or a JSON file) into the payload of the
@@ -216,21 +260,57 @@ export function toImportPayload(data: Partial<Snapshot>): ImportPayload {
       .map(parseGeneratedKey)
       .filter((k) => k.recurringId && isMonth(k.month))
       .map((k) => ({ recurring_source_id: k.recurringId, month: `${k.month}-01` }));
-  if (data.ex)
-    p.transactions = data.ex
-      .filter((x) => x && isDate(x.date) && isAmount(x.amount) && x.cat)
-      .map((x) => ({
+  if (data.accounts)
+    p.accounts = data.accounts
+      .filter((a) => a && text(a.name).trim() && ACCOUNT_KINDS.includes(a.kind))
+      .map((a) => ({
+        source_id: String(a.id),
+        name: text(a.name, 100),
+        kind: a.kind,
+        currency: /^[A-Z]{3}$/.test(a.currency) ? a.currency : 'EUR',
+        opening_balance: Number.isFinite(a.openingBalance) ? a.openingBalance : 0,
+        opening_date: isDate(a.openingDate) ? a.openingDate : new Date().toISOString().slice(0, 10),
+        institution: text(a.institution, 100),
+        archived: !!a.archived,
+        deleted_at: a.deletedAt ?? null,
+      }));
+  if (data.ex) {
+    const ex = data.ex.map((x) =>
+      x && (x.type as string) === 's' ? { ...x, type: 't' as const, to: LEGACY_SAVINGS_ACCOUNT, cat: '' } : x,
+    );
+    if (ex.some((x) => x?.to === LEGACY_SAVINGS_ACCOUNT) && !p.accounts?.some((a) => a.source_id === LEGACY_SAVINGS_ACCOUNT))
+      (p.accounts ??= []).push({
+        source_id: LEGACY_SAVINGS_ACCOUNT,
+        name: 'Poupança',
+        kind: 'savings',
+        currency: 'EUR',
+        opening_balance: 0,
+        opening_date: ex.filter((x) => x?.to === LEGACY_SAVINGS_ACCOUNT).map((x) => x.date).sort()[0]!,
+        institution: '',
+        archived: false,
+        deleted_at: null,
+      });
+    p.transactions = ex.filter(isImportable).map((x) => {
+      const categorised = x.type === 'e' || x.type === 'i';
+      return {
         source_id: String(x.id),
         date: x.date,
         amount: x.amount,
         type: txTypeName(x.type),
-        // Income is always in 'Rendimentos' (old backups say 'Income'), savings in 'Poupança'.
-        category: fixedCategoryOf(x.type) ?? text(x.cat, 100),
-        subcategory: text(x.sub, 100),
+        // Income is always in 'Rendimentos' (old backups say 'Income').
+        category: categorised ? (fixedCategoryOf(x.type) ?? text(x.cat, 100)) : null,
+        subcategory: categorised ? text(x.sub, 100) : '',
         description: text(x.desc),
         tags: text(x.tags),
         fixed: !!x.fixed,
-      }));
+        account: x.acc ? String(x.acc) : '',
+        to_account: x.type === 't' ? String(x.to) : '',
+        to_amount: x.type === 't' ? (isAmount(x.toAmt) ? x.toAmt : x.amount) : null,
+        reimbursable: x.type === 'e' && x.amount > 0 && !!x.reimb,
+        deleted_at: x.del ?? null,
+      };
+    });
+  }
   return p;
 }
 
@@ -285,7 +365,7 @@ export class SupabaseRepository implements Repository {
 
   async listTransactions(): Promise<Transaction[]> {
     const rows = await this.all<TransactionRow>((from, to) =>
-      this.db.from('transactions').select('id, date, amount, type, category, subcategory, description, tags, fixed').order('seq').range(from, to),
+      this.db.from('transactions').select(TX_COLUMNS).order('seq').range(from, to),
     );
     return rows.map(txFromRow);
   }
@@ -414,7 +494,8 @@ export class SupabaseRepository implements Repository {
   }
 
   async exportSnapshot(): Promise<Snapshot> {
-    const [ex, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
+    const [accounts, ex, rec, bud, cats, subs, learn, gen, rules] = await Promise.all([
+      this.listAccounts(),
       this.listTransactions(),
       this.listRecurring(),
       this.getBudgets(),
@@ -424,7 +505,7 @@ export class SupabaseRepository implements Repository {
       this.getGeneratedMonths(),
       this.listKeywordRules(),
     ]);
-    return { ex, rec, bud, cats, subs, learn, gen, rules: rules.map(({ keyword, category }) => ({ keyword, category })) };
+    return { accounts, ex, rec, bud, cats, subs, learn, gen, rules: rules.map(({ keyword, category }) => ({ keyword, category })) };
   }
 
   async importSnapshot(data: Partial<Snapshot>, { replace }: { replace: boolean }): Promise<ImportResult> {

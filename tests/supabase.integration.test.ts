@@ -24,6 +24,9 @@ const tx = (over: Partial<Transaction> = {}): Transaction => ({
 
 const repoOf = (u: TestUser) => new SupabaseRepository(u.db, u.id);
 
+/** Transactions saved without an account go to the first one; compare the rest. */
+const withoutAccount = (txs: Transaction[]) => txs.map(({ acc: _acc, ...x }) => x);
+
 describe.skipIf(!HAVE_DB)('against a real database', () => {
   describe('repository', () => {
     let user: TestUser;
@@ -52,9 +55,9 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
       await repo.saveTransaction(a);
       await repo.saveTransaction(b);
       await repo.saveTransaction({ ...a, amount: 99.99, fixed: 1 });
-      expect(await repo.listTransactions()).toEqual([{ ...a, amount: 99.99, fixed: 1 }, b]);
+      expect(withoutAccount(await repo.listTransactions())).toEqual([{ ...a, amount: 99.99, fixed: 1 }, b]);
       await repo.deleteTransaction(a.id);
-      expect(await repo.listTransactions()).toEqual([b]);
+      expect(withoutAccount(await repo.listTransactions())).toEqual([b]);
       await repo.saveTransaction(a);
       expect((await repo.listTransactions()).map((x) => x.id)).toEqual([b.id, a.id]);
     });
@@ -98,6 +101,32 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
       expect('Food' in (await r.getCategories())).toBe(false);
     });
 
+    it('has a default account, saves transfers between accounts, and exports and imports them', async () => {
+      const r = repoOf(await signUp('accounts'));
+      const [main] = await r.listAccounts();
+      expect(main).toMatchObject({ name: 'Conta principal', kind: 'checking', openingBalance: 0, archived: false });
+      const savings = { ...main!, id: crypto.randomUUID(), name: 'Poupança', kind: 'savings' as const, institution: 'Bank B' };
+      await r.saveAccount(savings);
+      const move = tx({ type: 't', cat: '', amount: 500, acc: main!.id, to: savings.id, toAmt: 500, desc: 'To savings' });
+      const back = tx({ amount: -20, acc: main!.id, desc: 'Refund' });
+      await r.saveTransaction(move);
+      await r.saveTransaction(back);
+      expect(await r.listTransactions()).toEqual([move, back]);
+
+      const other = repoOf(await signUp('accounts-import'));
+      await other.importSnapshot(await r.exportSnapshot(), { replace: true });
+      const accounts = await other.listAccounts();
+      expect(accounts.map((a) => [a.name, a.kind, a.institution])).toEqual([
+        ['Conta principal', 'checking', ''],
+        ['Poupança', 'savings', 'Bank B'],
+      ]);
+      const [m, sv] = accounts;
+      expect((await other.listTransactions()).map((x) => [x.desc, x.type, x.amount, x.acc, x.to])).toEqual([
+        ['To savings', 't', 500, m!.id, sv!.id],
+        ['Refund', 'e', -20, m!.id, undefined],
+      ]);
+    });
+
     it('has subcategories: defaults, add, delete, and on transactions and recurring expenses', async () => {
       const r = repoOf(await signUp());
       const subs = await r.getSubcategories();
@@ -112,13 +141,13 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
       const bread = tx({ desc: 'Pão', sub: 'Padaria' });
       await r.saveTransaction(bread);
       await r.saveRecurring({ id: crypto.randomUUID(), desc: 'Cabaz', amount: 20, cat: 'Alimentação', sub: 'Padaria', day: 1, start: '2026-03' });
-      expect(await r.listTransactions()).toEqual([bread]);
+      expect(withoutAccount(await r.listTransactions())).toEqual([bread]);
       expect((await r.listRecurring())[0]!.sub).toBe('Padaria');
 
       await r.deleteSubcategory('Alimentação', 'Padaria');
       expect((await r.getSubcategories())['Alimentação']).not.toContain('Padaria');
       const { sub: _gone, ...withoutSub } = bread;
-      expect((await r.listTransactions())[0]).toEqual(withoutSub);
+      expect(withoutAccount(await r.listTransactions())[0]).toEqual(withoutSub);
       expect((await r.listRecurring())[0]!.sub).toBeUndefined();
 
       const snapshot = await r.exportSnapshot();
@@ -230,7 +259,7 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
       expect(upsert.error).not.toBeNull();
       const insert = await bob.db.from('transactions').insert({ user_id: alice.id, date: '2026-01-01', amount: 1, type: 'expense', category: 'X' });
       expect(insert.error?.code).toBe('42501');
-      expect(await repoOf(alice).listTransactions()).toEqual([aliceTx]);
+      expect(withoutAccount(await repoOf(alice).listTransactions())).toEqual([aliceTx]);
     });
 
     it('a member cannot change roles or activation, their own or anyone’s', async () => {

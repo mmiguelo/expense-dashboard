@@ -117,10 +117,18 @@ describe('backup', () => {
     expect(
       toCsv([
         { id: '1', date: '2026-01-02', amount: 3.5, desc: 'Say "hi"', cat: 'Other', type: 'e', tags: 'a, b', fixed: 1 },
-        { id: '2', date: '2026-01-03', amount: 100, desc: 'Salary', cat: 'Rendimentos', sub: 'Salário', type: 'i' },
+        { id: '2', date: '2026-01-03', amount: 100, desc: 'Salary', cat: 'Rendimentos', sub: 'Salário', type: 'i', acc: 'm' },
+        { id: '3', date: '2026-01-04', amount: 50, desc: 'Save', cat: '', type: 't', acc: 'm', to: 's', toAmt: 50 },
+        { id: '4', date: '2026-01-05', amount: 9, desc: 'Gone', cat: 'Other', type: 'e', del: '2026-01-06T00:00:00Z' },
+      ], [
+        { id: 'm', name: 'Main', kind: 'checking', currency: 'EUR', openingBalance: 0, openingDate: '2026-01-01', institution: '', archived: false },
+        { id: 's', name: 'Savings', kind: 'savings', currency: 'EUR', openingBalance: 0, openingDate: '2026-01-01', institution: '', archived: false },
       ]),
     ).toBe(
-      'date,type,amount,category,subcategory,description,tags,fixed\n2026-01-02,expense,3.5,Other,"","Say ""hi""","a, b",1\n2026-01-03,income,100,Rendimentos,"Salário","Salary","",0',
+      'date,type,amount,account,to_account,category,subcategory,description,tags,fixed,reimbursable\n' +
+        '2026-01-02,expense,3.5,"","",Other,"","Say ""hi""","a, b",1,0\n' +
+        '2026-01-03,income,100,"Main","",Rendimentos,"Salário","Salary","",0,0\n' +
+        '2026-01-04,transfer,50,"Main","Savings",,"","Save","",0,0',
     );
   });
 

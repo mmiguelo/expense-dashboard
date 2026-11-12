@@ -12,7 +12,7 @@ import {
   totalsByCategory,
   trendBars,
 } from '../src/analytics';
-import type { Transaction } from '../src/types';
+import type { Account, Transaction } from '../src/types';
 
 let nextId = 1;
 const tx = (date: string, amount: number, over: Partial<Transaction> = {}): Transaction => ({
@@ -89,15 +89,33 @@ describe('summarize: daily, monthly and yearly totals', () => {
     expect(s.fixedShare).toBe(75);
   });
 
-  it('keeps money moved to savings out of spending but takes it off the net balance', () => {
-    const toSavings = tx('2026-03-05', 300, { type: 's', cat: 'Poupança', desc: 'Poupança' });
-    const s = summarize([income('2026-03-01', 1000), tx('2026-03-02', 200), toSavings], '2026-03-01', 'month', '2026-03-20');
+  it('keeps transfers out of income and spending, and counts what moved into savings', () => {
+    const acc = (id: string, kind: Account['kind']): Account =>
+      ({ id, name: id, kind, currency: 'EUR', openingBalance: 0, openingDate: '2026-01-01', institution: '', archived: false });
+    const accounts = [acc('main', 'checking'), acc('save', 'savings'), acc('save2', 'savings')];
+    const transfer = (amount: number, from: string, to: string) => tx('2026-03-05', amount, { type: 't', cat: '', acc: from, to, toAmt: amount });
+    const txs = [
+      income('2026-03-01', 1000),
+      tx('2026-03-02', 200),
+      transfer(300, 'main', 'save'),
+      transfer(50, 'save', 'main'),
+      transfer(80, 'save', 'save2'),
+      tx('2026-03-03', 40, { del: '2026-03-04T00:00:00Z' }),
+    ];
+    const s = summarize(txs, '2026-03-01', 'month', '2026-03-20', accounts);
     expect(s.total).toBe(200);
     expect(s.expenses).toHaveLength(1);
-    expect(s.saved).toBe(300);
-    expect(s.net).toBe(500);
+    expect(s.income).toBe(1000);
+    expect(s.saved).toBe(250);
+    expect(s.net).toBe(800);
     expect(s.savingsRate).toBe(80);
     expect(s.categories.map(([c]) => c)).toEqual(['Groceries']);
+  });
+
+  it('counts money back (negative expenses) against spending', () => {
+    const s = summarize([tx('2026-03-02', 50), tx('2026-03-09', -20)], '2026-03-01', 'month', '2026-03-20');
+    expect(s.total).toBe(30);
+    expect(s.byCategory).toEqual({ Groceries: 30 });
   });
 
   it('has no savings rate without income and 0% fixed without spending', () => {

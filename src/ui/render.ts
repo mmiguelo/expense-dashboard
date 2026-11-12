@@ -1,9 +1,9 @@
 import type { CategoryRow, Change, HeatmapDay, Merchant, PeriodSummary, QuickPick, TrendBar } from '../analytics';
-import { categoryColor, expenseCategoryNames, INCOME_CATEGORY, SAVINGS_CATEGORY } from '../categories';
+import { categoryColor, expenseCategoryNames, INCOME_CATEGORY } from '../categories';
 import { formatDmy, parseIsoDate } from '../dates';
 import { escapeHtml as esc, formatEur as eur } from '../format';
 import { monthNames, t, tn } from '../i18n';
-import type { Budgets, Categories, KeywordRule, Mode, RecurringExpense, Subcategories, Transaction } from '../types';
+import type { Account, Budgets, Categories, KeywordRule, Mode, RecurringExpense, Subcategories, Transaction } from '../types';
 
 // Pure HTML builders. Dashboard markup is kept identical to the original single-file app.
 
@@ -17,13 +17,17 @@ export function periodLabel(ref: string, mode: Mode): string {
 
 export const trendTitle = (mode: Mode): string => t(`trend.${mode}`);
 
-/** Expense categories; with `withIncome`, 'Rendimentos' and 'Poupança' last. */
+/** Expense categories; with `withIncome`, 'Rendimentos' last. */
 export const categoryOptions = (cats: Categories, withIncome = false, withAll = false): string =>
   (withAll ? `<option value="">${esc(t('filter.allCategories'))}</option>` : '') +
   expenseCategoryNames(cats)
     .map((c) => `<option>${esc(c)}</option>`)
     .join('') +
-  (withIncome ? `<option>${INCOME_CATEGORY}</option><option>${SAVINGS_CATEGORY}</option>` : '');
+  (withIncome ? `<option>${INCOME_CATEGORY}</option>` : '');
+
+/** Accounts to pick from, by id. */
+export const accountOptions = (accounts: Account[]): string =>
+  accounts.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
 
 /** A category's subcategories, after a "none" option. */
 export const subcategoryOptions = (names: string[] = []): string =>
@@ -101,13 +105,23 @@ export const topMerchantsHtml = (merchants: Merchant[]): string =>
     .map((z) => `<div class="row" style="grid-template-columns:1fr auto"><div>${esc(z.name)} <small>${z.count}×</small></div><b>${eur(z.total)}</b></div>`)
     .join('') || `<div class="mute">${t('top.empty')}</div>`;
 
-export function transactionListHtml(txs: Transaction[], cats: Categories): string {
+const TRANSFER_COLOR = '#8a8478';
+
+/**
+ * Transactions, newest first. With more than one account, each says which account it
+ * was on; transfers show "From → To" instead of a category.
+ */
+export function transactionListHtml(txs: Transaction[], cats: Categories, accounts: Account[] = []): string {
   if (!txs.length) return `<div class="mute">${t('list.empty')}</div>`;
+  const name = (id?: string) => esc(accounts.find((a) => a.id === id)?.name ?? '');
+  const several = accounts.filter((a) => !a.deletedAt).length > 1;
   return txs
-    .map(
-      (x) =>
-        `<div class="row"><span class="dot" style="background:${categoryColor(x.cat, cats)}"></span><div>${esc(x.desc)}<div class="mute">${formatDmy(x.date)}, ${categoryLabel(x.cat, x.sub)}${x.tags ? ', ' + esc(x.tags) : ''}</div></div><div><b>${x.type === 'i' ? '+' : x.type === 's' ? '→ ' : ''}${eur(x.amount)}</b> <button class="x" data-edit="${x.id}" aria-label="${esc(t('common.edit'))}">✎</button><button class="x" data-del="${x.id}" aria-label="${esc(t('common.delete'))}">✕</button></div></div>`,
-    )
+    .map((x) => {
+      const transfer = x.type === 't';
+      const where = transfer ? `${name(x.acc)} → ${name(x.to)}` : categoryLabel(x.cat, x.sub) + (several ? ` · ${name(x.acc)}` : '');
+      const sign = x.type === 'i' ? '+' : transfer ? '→ ' : '';
+      return `<div class="row"><span class="dot" style="background:${transfer ? TRANSFER_COLOR : categoryColor(x.cat, cats)}"></span><div>${esc(x.desc)}<div class="mute">${formatDmy(x.date)}, ${where}${x.tags ? ', ' + esc(x.tags) : ''}</div></div><div><b>${sign}${eur(x.amount)}</b> <button class="x" data-edit="${x.id}" aria-label="${esc(t('common.edit'))}">✎</button><button class="x" data-del="${x.id}" aria-label="${esc(t('common.delete'))}">✕</button></div></div>`;
+    })
     .join('');
 }
 

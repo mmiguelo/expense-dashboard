@@ -1,15 +1,32 @@
 import { daysInMonth, inPeriod, pad, parseIsoDate, shiftRef, toIsoDate } from './dates';
 import { monthNames } from './i18n';
-import type { Budgets, Mode, Transaction } from './types';
+import type { Account, Budgets, Mode, Transaction } from './types';
 
 // All functions are pure. `ref` is the selected date (YYYY-MM-DD) and `today` the
 // current local date; together with `mode` they define the period being looked at.
 
 export const sumAmounts = (txs: Transaction[]): number => txs.reduce((s, x) => s + x.amount, 0);
 
-export const expensesOf = (txs: Transaction[]): Transaction[] => txs.filter((x) => x.type === 'e');
-export const incomesOf = (txs: Transaction[]): Transaction[] => txs.filter((x) => x.type === 'i');
-export const savingsOf = (txs: Transaction[]): Transaction[] => txs.filter((x) => x.type === 's');
+/** Transactions that aren't soft-deleted. */
+export const liveOf = (txs: Transaction[]): Transaction[] => txs.filter((x) => !x.del);
+/** Spending, including money back (negative amounts). */
+export const expensesOf = (txs: Transaction[]): Transaction[] => txs.filter((x) => x.type === 'e' && !x.del);
+export const incomesOf = (txs: Transaction[]): Transaction[] => txs.filter((x) => x.type === 'i' && !x.del);
+
+/**
+ * Net amount moved into savings accounts by transfers: what arrived in them minus what
+ * left them. Transfers between two savings accounts cancel out.
+ */
+export function movedToSavings(txs: Transaction[], accounts: Account[]): number {
+  const savings = new Set(accounts.filter((a) => a.kind === 'savings').map((a) => a.id));
+  let n = 0;
+  for (const x of txs) {
+    if (x.type !== 't' || x.del) continue;
+    if (savings.has(x.to!)) n += x.toAmt ?? x.amount;
+    if (savings.has(x.acc!)) n -= x.amount;
+  }
+  return n;
+}
 
 export const inPeriodOf = (txs: Transaction[], ref: string, mode: Mode): Transaction[] =>
   txs.filter((x) => inPeriod(x.date, ref, mode));
@@ -62,7 +79,7 @@ export interface PeriodSummary {
   expenses: Transaction[];
   total: number;
   income: number;
-  /** Moved to savings in the period. */
+  /** Net amount transferred into savings accounts in the period (negative: taken out). */
   saved: number;
   previousTotal: number;
   /** Category totals for the period, largest first. */
@@ -73,7 +90,7 @@ export interface PeriodSummary {
   /** Average per day (month mode) or per month (year mode). */
   average: number;
   projected: number | null;
-  /** Left of the income after expenses and money moved to savings. */
+  /** Income minus spending. */
   net: number;
   /** Rounded percentage of income not spent (moved to savings or not); null without income. */
   savingsRate: number | null;
@@ -83,11 +100,11 @@ export interface PeriodSummary {
   variable: number;
 }
 
-export function summarize(txs: Transaction[], ref: string, mode: Mode, today: string): PeriodSummary {
+export function summarize(txs: Transaction[], ref: string, mode: Mode, today: string, accounts: Account[] = []): PeriodSummary {
   const expenses = inPeriodOf(expensesOf(txs), ref, mode);
   const total = sumAmounts(expenses);
   const income = sumAmounts(inPeriodOf(incomesOf(txs), ref, mode));
-  const saved = sumAmounts(inPeriodOf(savingsOf(txs), ref, mode));
+  const saved = movedToSavings(inPeriodOf(txs, ref, mode), accounts);
   const previous = inPeriodOf(expensesOf(txs), shiftRef(ref, -1, mode), mode);
   const byCategory = totalsByCategory(expenses);
   const fixed = sumAmounts(expenses.filter((x) => x.fixed));
@@ -104,7 +121,7 @@ export function summarize(txs: Transaction[], ref: string, mode: Mode, today: st
     span,
     average: total / span,
     projected: projectedTotal(total, ref, mode, today),
-    net: income - total - saved,
+    net: income - total,
     savingsRate: income ? Math.round(((income - total) / income) * 100) : null,
     fixed,
     fixedShare: total ? Math.round((fixed / total) * 100) : 0,

@@ -68,3 +68,22 @@ export function saveFoldedSections(ids: string[]): void {
     // Not remembered.
   }
 }
+
+const LAST_ACCOUNT_KEY = 'last-account';
+
+/** The account of the last transaction added in this browser, to pre-select it. */
+export function lastAccount(): string | null {
+  try {
+    return localStorage.getItem(LAST_ACCOUNT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function saveLastAccount(id: string): void {
+  try {
+    localStorage.setItem(LAST_ACCOUNT_KEY, id);
+  } catch {
+    // Not remembered; the first account is pre-selected instead.
+  }
+}

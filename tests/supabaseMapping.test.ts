@@ -16,6 +16,11 @@ describe('row mapping', () => {
       description: 'Lidl',
       tags: 'x',
       fixed: false,
+      account_id: undefined,
+      to_account_id: null,
+      to_amount: null,
+      reimbursable: false,
+      deleted_at: null,
     });
     expect(txFromRow(txToRow(tx))).toEqual(tx);
     const fixed: Transaction = { ...tx, type: 'e', fixed: 1 };
@@ -26,9 +31,14 @@ describe('row mapping', () => {
     const income: Transaction = { ...tx, type: 'i', cat: 'Rendimentos' };
     expect(txToRow(income).type).toBe('income');
     expect(txFromRow(txToRow(income))).toEqual(income);
-    const savings: Transaction = { ...tx, type: 's', cat: 'Poupança' };
-    expect(txToRow(savings).type).toBe('savings');
-    expect(txFromRow(txToRow(savings))).toEqual(savings);
+    const transfer: Transaction = { ...tx, type: 't', cat: '', to: 'savings', toAmt: 12.5 };
+    expect(txToRow(transfer)).toMatchObject({ type: 'transfer', category: null, to_account_id: 'savings', to_amount: 12.5 });
+    expect(txFromRow(txToRow(transfer))).toEqual(transfer);
+    const adjustment: Transaction = { ...tx, type: 'a', cat: '', amount: -3 };
+    expect(txToRow(adjustment)).toMatchObject({ type: 'adjustment', category: null, to_account_id: null });
+    expect(txFromRow(txToRow(adjustment))).toEqual(adjustment);
+    const reimbursable: Transaction = { ...tx, reimb: 1, del: '2026-03-02T00:00:00Z' };
+    expect(txFromRow(txToRow(reimbursable))).toEqual(reimbursable);
   });
 
   it('reads numeric amounts sent as strings', () => {
@@ -55,7 +65,22 @@ describe('toImportPayload', () => {
     });
     expect(p).toEqual({
       transactions: [
-        { source_id: '1773828000000.123', date: '2026-03-01', amount: 5, type: 'expense', category: 'Fuel', subcategory: '', description: 'Old', tags: '', fixed: true },
+        {
+          source_id: '1773828000000.123',
+          date: '2026-03-01',
+          amount: 5,
+          type: 'expense',
+          category: 'Fuel',
+          subcategory: '',
+          description: 'Old',
+          tags: '',
+          fixed: true,
+          account: '',
+          to_account: '',
+          to_amount: null,
+          reimbursable: false,
+          deleted_at: null,
+        },
       ],
       recurring: [{ source_id: 'r1', description: 'Gym', amount: 30, category: 'Gym', subcategory: '', day: 31, start_month: '2026-01-01' }],
       occurrences: [
@@ -149,5 +174,38 @@ describe('account rows', () => {
     expect(accountFromRow({ ...accountToRow(account), opening_balance: '12.30' as unknown as number }).openingBalance).toBe(12.3);
     const deleted = { ...account, deletedAt: '2026-11-12T10:00:00Z' };
     expect(accountFromRow(accountToRow(deleted))).toEqual(deleted);
+  });
+});
+
+describe('toImportPayload with accounts', () => {
+  it('turns the old savings type into a transfer to a savings account it adds', () => {
+    const p = toImportPayload({
+      ex: [{ id: 's1', date: '2026-11-11', amount: 300, desc: 'Poupança', cat: 'Poupança', type: 's' as Transaction['type'] }],
+    });
+    expect(p.accounts).toEqual([
+      expect.objectContaining({ source_id: 'legacy-savings', name: 'Poupança', kind: 'savings', opening_date: '2026-11-11' }),
+    ]);
+    expect(p.transactions).toEqual([
+      expect.objectContaining({ type: 'transfer', category: null, account: '', to_account: 'legacy-savings', to_amount: 300 }),
+    ]);
+  });
+
+  it('keeps accounts, money back and adjustments, and drops what the database would reject', () => {
+    const p = toImportPayload({
+      accounts: [{ id: 'a1', name: 'Card', kind: 'credit', currency: 'EUR', openingBalance: -50, openingDate: '2026-01-01', institution: 'X', archived: false }],
+      ex: [
+        { id: '1', date: '2026-03-01', amount: -20, desc: 'Refund', cat: 'Fuel', type: 'e', acc: 'a1' },
+        { id: '2', date: '2026-03-01', amount: -5, desc: 'Fix', cat: '', type: 'a', acc: 'a1' },
+        { id: '3', date: '2026-03-01', amount: 5, desc: 'Nowhere', cat: '', type: 't', acc: 'a1' },
+        { id: '4', date: '2026-03-01', amount: -5, desc: 'Bad', cat: 'Rendimentos', type: 'i' },
+      ],
+    });
+    expect(p.accounts).toEqual([
+      { source_id: 'a1', name: 'Card', kind: 'credit', currency: 'EUR', opening_balance: -50, opening_date: '2026-01-01', institution: 'X', archived: false, deleted_at: null },
+    ]);
+    expect(p.transactions!.map((x) => [x.source_id, x.type, x.amount, x.account])).toEqual([
+      ['1', 'expense', -20, 'a1'],
+      ['2', 'adjustment', -5, 'a1'],
+    ]);
   });
 });

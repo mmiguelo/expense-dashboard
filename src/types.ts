@@ -2,10 +2,11 @@
 // and JSON backups). Renaming them would break existing data.
 
 /**
- * 'e' = expense, 'i' = income, 's' = savings: money moved from the everyday account to a
- * savings account. Savings are not spending, but they leave the money available to spend.
+ * 'e' = expense (a negative amount is money back: a refund or reimbursement), 'i' = income,
+ * 't' = transfer between two of the user's accounts, 'a' = balance adjustment (signed).
+ * Transfers and adjustments are never income or spending.
  */
-export type TxType = 'e' | 'i' | 's';
+export type TxType = 'e' | 'i' | 't' | 'a';
 
 export interface Transaction {
   /** UUID. Data from before accounts has numeric ids, read as strings. */
@@ -14,7 +15,7 @@ export interface Transaction {
   date: string;
   amount: number;
   desc: string;
-  /** Category name; always 'Rendimentos' for income ('Income' in old data) and 'Poupança' for savings. */
+  /** Category name; always 'Rendimentos' for income ('Income' in old data); '' for transfers and adjustments. */
   cat: string;
   /** One of the category's subcategories; absent or '' = none. */
   sub?: string;
@@ -22,6 +23,16 @@ export interface Transaction {
   tags?: string;
   /** Set on transactions generated from a recurring expense. */
   fixed?: 1;
+  /** Account id. Absent only in old backups, which go to the first account. */
+  acc?: string;
+  /** Transfers: the receiving account. */
+  to?: string;
+  /** Transfers: the amount that arrived (same as `amount` until accounts have currencies). */
+  toAmt?: number;
+  /** A purchase someone else will pay back. */
+  reimb?: 1;
+  /** Soft-deleted (ISO timestamp). */
+  del?: string;
 }
 
 export type NewTransaction = Omit<Transaction, 'id'>;
@@ -126,4 +137,6 @@ export interface Snapshot {
   gen: GeneratedMonths;
   /** Keyword rules; absent in backups from before accounts had their own. */
   rules?: KeywordRule[];
+  /** Money accounts; absent in backups from before them. */
+  accounts?: Account[];
 }
