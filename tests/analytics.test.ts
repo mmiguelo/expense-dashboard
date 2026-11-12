@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  accountBalance,
+  accountDeleteBlocker,
   categoryRows,
   frequentExpenses,
   heatmapDays,
+  overview,
   percentChange,
   periodSpan,
   projectedTotal,
@@ -11,6 +14,7 @@ import {
   topMerchants,
   totalsByCategory,
   trendBars,
+  visibleTransactions,
 } from '../src/analytics';
 import type { Account, Transaction } from '../src/types';
 
@@ -306,5 +310,74 @@ describe('searchTransactions', () => {
 
   it('filters by category', () => {
     expect(searchTransactions(txs, '2026-03-10', 'month', '', 'Groceries').map((x) => x.desc)).toEqual(['Padaria', 'Pingo Doce']);
+  });
+});
+
+describe('account balances', () => {
+  const acc = (id: string, kind: Account['kind'], openingBalance = 0, openingDate = '2026-01-01', more: Partial<Account> = {}): Account => ({
+    id, name: id, kind, currency: 'EUR', openingBalance, openingDate, institution: '', archived: false, ...more,
+  });
+  const on = (acc: string, date: string, amount: number, type: Transaction['type'] = 'e', more: Partial<Transaction> = {}) =>
+    tx(date, amount, { type, acc, cat: type === 'e' || type === 'i' ? 'Groceries' : '', ...more });
+
+  it('is the opening balance plus everything on or after the opening date', () => {
+    const main = acc('main', 'checking', 1000, '2026-03-01');
+    const txs = [
+      on('main', '2026-02-28', 999), // before the opening balance: already in it
+      on('main', '2026-03-01', 2000, 'i'),
+      on('main', '2026-03-02', 150),
+      on('main', '2026-03-03', -20), // money back
+      on('main', '2026-03-04', -5, 'a'),
+      on('main', '2026-03-05', 70, 'e', { del: '2026-03-06T00:00:00Z' }),
+    ];
+    expect(accountBalance(main, txs)).toBe(2865);
+  });
+
+  it('moves money with transfers without changing the total (A: 2000, B: 3000, move 500)', () => {
+    const accounts = [acc('a', 'checking', 2000), acc('b', 'savings', 3000)];
+    const o = overview(accounts, [on('a', '2026-03-01', 500, 't', { to: 'b', toAmt: 500 })]);
+    expect(o.balances.map((b) => b.balance)).toEqual([1500, 3500]);
+    expect(o.netWorth).toBe(5000);
+    expect([o.available, o.savings]).toEqual([1500, 3500]);
+  });
+
+  it('totals by kind, with credit cards as debt, and warns about negative non-credit balances', () => {
+    const accounts = [
+      acc('main', 'checking', 100),
+      acc('meal', 'restricted', 0),
+      acc('visa', 'credit', 0),
+      acc('old', 'savings', 50, '2026-01-01', { archived: true }),
+      acc('gone', 'savings', 999, '2026-01-01', { deletedAt: '2026-03-01T00:00:00Z' }),
+    ];
+    const txs = [
+      on('meal', '2026-03-01', 160, 'i'),
+      on('meal', '2026-03-02', 40),
+      on('visa', '2026-03-03', 300),
+      on('main', '2026-03-04', 250),
+      on('main', '2026-03-28', 100, 't', { to: 'visa', toAmt: 100 }), // paying the card isn't spending
+    ];
+    const o = overview(accounts, txs);
+    expect(o.balances.map((b) => [b.account.id, b.balance, b.warning])).toEqual([
+      ['main', -250, true],
+      ['meal', 120, false],
+      ['visa', -200, false],
+      ['old', 50, false],
+    ]);
+    expect(o).toMatchObject({ netWorth: -280, available: -250, restricted: 120, savings: 50, creditDebt: 200 });
+    expect(o.has).toEqual({ checking: true, savings: true, restricted: true, credit: true });
+    expect(summarize(txs, '2026-03-01', 'month', '2026-03-31', accounts).total).toBe(590);
+  });
+
+  it('blocks deleting the last open account or one with transfers', () => {
+    const accounts = [acc('a', 'checking'), acc('b', 'savings')];
+    expect(accountDeleteBlocker(accounts[0]!, [accounts[0]!], [])).toBe('last');
+    expect(accountDeleteBlocker(accounts[1]!, accounts, [on('a', '2026-03-01', 5, 't', { to: 'b', toAmt: 5 })])).toBe('transfers');
+    expect(accountDeleteBlocker(accounts[1]!, accounts, [on('b', '2026-03-01', 5)])).toBeNull();
+  });
+
+  it('leaves out transactions on deleted accounts', () => {
+    const accounts = [acc('a', 'checking'), acc('b', 'checking', 0, '2026-01-01', { deletedAt: '2026-03-01T00:00:00Z' })];
+    const txs = [on('a', '2026-03-01', 5), on('b', '2026-03-01', 7)];
+    expect(visibleTransactions(txs, accounts).map((x) => x.amount)).toEqual([5]);
   });
 });

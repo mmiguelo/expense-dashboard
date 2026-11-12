@@ -76,6 +76,8 @@ export function translateError(message: string): string {
   if (/only the owner can/.test(message)) return t('admin.err.ownerOnly');
   if (/own role/.test(message)) return t('admin.err.ownRole');
   if (/deactivate your own/.test(message)) return t('admin.err.ownDeactivate');
+  if (/Archive it instead/.test(message)) return t('acc.blocked.transfers');
+  if (/at least one open account/.test(message)) return t('acc.blocked.last');
   if (/duplicate key/.test(message)) return t('db.duplicate');
   return message;
 }

@@ -220,3 +220,14 @@ input[type=color]:focus-visible{outline:0;border-color:var(--acc-strong);box-sha
 
 input[readonly]{background:transparent;color:var(--mute);border-style:dashed}
 input[readonly]:hover,input[readonly]:focus{border-color:var(--line)}
+
+/* Accounts: rows in "Where your money is" filter the dashboard. */
+.acclist{margin-top:14px}
+.accrow{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;width:100%;text-align:left;border:0;border-top:1px dotted var(--line);border-radius:0;background:transparent;padding:9px 6px;color:inherit;font-weight:400}
+.accrow small{display:block}
+.accrow .accname{font-weight:500}
+.accrow.on{background:var(--hover);box-shadow:inset 3px 0 0 var(--acc)}
+.accnote{margin-top:8px}
+.linkbtn{border:0;background:transparent;padding:2px 6px;color:var(--acc);font-size:12.5px;text-decoration:underline}
+.linkbtn:hover{background:transparent;color:var(--ink)}
+.subhead{font:600 11.5px/1.3 var(--sans);text-transform:uppercase;letter-spacing:.09em;color:var(--mute);margin:18px 0 6px}

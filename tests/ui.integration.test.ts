@@ -371,6 +371,50 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     await until(() => !document.querySelector('[data-sub-delete="Bowling"]'), 'subcategory deleted');
   });
 
+  it('accounts: added in settings, balances in the overview, transfers between them, filtering by one', async () => {
+    const email = newEmail();
+    await openPage();
+    await signUpThroughForm(email);
+    // One account: just its balance, and no Account field in the form.
+    expect($('ovBody').textContent).toContain('0,00');
+    expect($('accL').hidden).toBe(true);
+
+    openView('settings');
+    type('an', 'Poupança');
+    $<HTMLSelectElement>('ak').value = 'savings';
+    type('ab', '3000');
+    $('asave').click();
+    await until(() => $('alist').textContent!.includes('Poupança'), 'new account listed');
+    openView('dashboard');
+    expect($('accL').hidden).toBe(false);
+
+    $<HTMLSelectElement>('type').value = 't';
+    $('type').dispatchEvent(new Event('change'));
+    expect($('catL').hidden).toBe(true);
+    $<HTMLSelectElement>('acc').value = $<HTMLSelectElement>('acc').options[0]!.value;
+    $('acc').dispatchEvent(new Event('change'));
+    type('amt', '500');
+    $('sub').click();
+    await until(() => $('list').textContent!.includes('Conta principal → Poupança'), 'transfer listed');
+    expect($('ovBody').textContent).toContain('3000,00');
+    expect($('ovBody').textContent).toContain('-500,00');
+    expect($('sum').textContent).toContain('500,00');
+
+    const savingsRow = [...document.querySelectorAll<HTMLElement>('.accrow')].find((b) => b.textContent!.includes('Poupança'))!;
+    savingsRow.click();
+    await until(() => $('ovBody').textContent!.includes('ov.showing') || !!document.querySelector('.accrow.on'), 'filtered');
+    expect(document.querySelector('.accrow.on')!.textContent).toContain('Poupança');
+    (document.querySelector('[data-accf=""].linkbtn') as HTMLElement).click();
+    await until(() => !document.querySelector('.accrow.on'), 'filter cleared');
+
+    // An account with transfers can't be deleted; it can be archived.
+    openView('settings');
+    const id = (await (await accountRepo(email)).listAccounts()).find((a) => a.name === 'Poupança')!.id;
+    (document.querySelector(`[data-adel="${id}"]`) as HTMLElement).click();
+    await until(() => $('tm').textContent!.length > 0, 'blocked message');
+    expect((await (await accountRepo(email)).listAccounts()).find((a) => a.id === id)!.deletedAt).toBeUndefined();
+  });
+
   it('settings: sections collapse to their heading, remembered on reload', async () => {
     await openPage();
     await signUpThroughForm(newEmail());

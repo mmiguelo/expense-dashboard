@@ -1,13 +1,17 @@
 import {
+  accountDeleteBlocker,
   categoryRows,
   expensesOf,
   frequentExpenses,
   heatmapDays,
+  onAccount,
+  overview,
   percentChange,
   searchTransactions,
   summarize,
   topMerchants,
   trendBars,
+  visibleTransactions,
 } from '../analytics';
 import { toCsv, parseBackup } from '../backup';
 import { expenseCategoryNames, guessCategory, fixedCategoryOf, guessSubcategory, isIncomeCategory, missingCategories, nextCategoryColor } from '../categories';
@@ -49,6 +53,8 @@ export interface AppHandle {
 }
 
 interface Data {
+  /** The profile's currency, for new accounts. */
+  currency: string;
   accounts: Account[];
   txs: Transaction[];
   rec: RecurringExpense[];
@@ -73,7 +79,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   const formDate = () => parseDmy($('date').value);
   const newId = () => crypto.randomUUID();
 
-  let data: Data = { accounts: [], txs: [], rec: [], bud: {}, cats: {}, subs: {}, learn: {}, gen: {}, rules: [] };
+  let data: Data = { currency: 'EUR', accounts: [], txs: [], rec: [], bud: {}, cats: {}, subs: {}, learn: {}, gen: {}, rules: [] };
   let mode: Mode = 'month';
   let ref = today();
   /** The user picked a category by hand, so stop auto-guessing it. */
@@ -83,6 +89,10 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   let editId: string | null = null;
   let lastDeleted: Transaction | null = null;
   let toastTimer: number | undefined;
+  /** The account the dashboard is limited to, if any. */
+  let accountFilter: string | null = null;
+  /** Account being edited in settings. */
+  let accountEditId: string | null = null;
   /** Category waiting for confirmation in the delete panel. */
   let deleting: string | null = null;
 
@@ -104,7 +114,7 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       onDeactivated?.();
       throw new Error(t('err.deactivated'));
     }
-    data = { accounts, txs, rec, bud, cats, subs, learn, gen, rules };
+    data = { currency: profile.currency, accounts, txs, rec, bud, cats, subs, learn, gen, rules };
   }
 
   async function generateDueRecurring(): Promise<void> {
@@ -165,15 +175,13 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     fillSubs('subcat', c.value);
   }
 
-  /** Accounts that can take new entries: not archived, not deleted. */
-  const openAccounts = () => data.accounts.filter((a) => !a.archived && !a.deletedAt);
-
   /**
    * The form's Account and To fields: shown only with more than one account, and Transfer
    * only offered then. Keeps the selected accounts when they are still there.
    */
   function fillAccounts(acc = sel('acc').value, to = sel('toAcc').value): void {
-    const open = openAccounts();
+    // An entry being edited keeps its account even if that was archived since.
+    const open = data.accounts.filter((a) => !a.deletedAt && (!a.archived || (editId !== null && (a.id === acc || a.id === to))));
     const ids = open.map((a) => a.id);
     sel('acc').innerHTML = sel('toAcc').innerHTML = html.accountOptions(open);
     const remembered = lastAccount();
@@ -205,8 +213,14 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
     fillSubs('rsub', sel('rc').value);
   }
 
+  /** What the dashboard shows: no deleted entries or accounts, limited to the chosen account. */
+  function shownTransactions(): Transaction[] {
+    const visible = visibleTransactions(data.txs, data.accounts);
+    return accountFilter ? onAccount(visible, accountFilter) : visible;
+  }
+
   function renderList(): void {
-    const list = searchTransactions(data.txs, ref, mode, $('q').value, sel('fc').value);
+    const list = searchTransactions(shownTransactions(), ref, mode, $('q').value, sel('fc').value);
     $('list').innerHTML = html.transactionListHtml(list, data.cats, data.accounts);
   }
 
@@ -219,6 +233,8 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
       }),
     );
     $('rlist').innerHTML = html.recurringListHtml(data.rec, data.cats);
+    $('alist').innerHTML = html.accountSettingsHtml(overview(data.accounts, data.txs).balances);
+    $('adeleted').innerHTML = html.deletedAccountsHtml(data.accounts.filter((a) => a.deletedAt));
     const open = new Set([...doc.querySelectorAll<HTMLDetailsElement>('[data-subs]')].filter((d) => d.open).map((d) => d.dataset.subs!));
     $('catList').innerHTML = html.categoryEditorHtml(data.cats, categoryUsage(), data.subs, open);
     renderRules();
@@ -238,18 +254,23 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
   async function render(): Promise<void> {
     await generateDueRecurring();
     fillSelects();
-    const s = summarize(data.txs, ref, mode, today(), data.accounts);
+    const o = overview(data.accounts, data.txs);
+    if (accountFilter && !o.balances.some((b) => b.account.id === accountFilter)) accountFilter = null;
+    $('ov').hidden = false;
+    $('ovBody').innerHTML = html.overviewHtml(o, accountFilter);
+    const txs = shownTransactions();
+    const s = summarize(txs, ref, mode, today(), data.accounts);
     $('lbl').textContent = html.periodLabel(ref, mode);
     $('sum').innerHTML = html.summaryHtml(s, mode, percentChange(s.total, s.previousTotal));
     $('tT').textContent = html.trendTitle(mode);
-    $('trend').innerHTML = html.trendHtml(trendBars(expensesOf(data.txs), ref, mode), data.cats);
+    $('trend').innerHTML = html.trendHtml(trendBars(expensesOf(txs), ref, mode), data.cats);
     $('donut').innerHTML = html.donutHtml(s, data.cats);
     $('cats').innerHTML = html.categoryRowsHtml(categoryRows(s, data.bud, mode), data.cats);
     $('heatC').style.display = mode === 'day' ? 'none' : '';
     if (mode !== 'day') $('heat').innerHTML = html.heatmapHtml(heatmapDays(s.expenses, ref, mode));
     $('top').innerHTML = html.topMerchantsHtml(topMerchants(s.expenses));
     renderList();
-    $('chips').innerHTML = html.quickPicksHtml(frequentExpenses(expensesOf(data.txs)));
+    $('chips').innerHTML = html.quickPicksHtml(frequentExpenses(expensesOf(visibleTransactions(data.txs, data.accounts))));
     renderSettings();
   }
 
@@ -648,6 +669,97 @@ export async function startApp({ doc, repo, clock = () => new Date(), onDeactiva
         toast(importMessage(result));
       },
     );
+  });
+
+  // ---- accounts ----
+
+  function resetAccountForm(): void {
+    accountEditId = null;
+    ['an', 'ab', 'ai'].forEach((i) => ($(i).value = ''));
+    sel('ak').value = 'checking';
+    $('ad').value = today();
+    $('asave').textContent = t('acc.add');
+    $('acancel').hidden = true;
+  }
+
+  function editAccount(a: Account): void {
+    accountEditId = a.id;
+    $('an').value = a.name;
+    sel('ak').value = a.kind;
+    $('ab').value = a.openingBalance ? amountToInput(a.openingBalance) : '';
+    $('ad').value = a.openingDate;
+    $('ai').value = a.institution;
+    $('asave').textContent = t('acc.save');
+    $('acancel').hidden = false;
+    $('an').focus();
+  }
+
+  function saveAccountForm(): void {
+    const name = $('an').value.trim();
+    if (!name) {
+      $('an').setCustomValidity(t('acc.nameRequired'));
+      $('an').reportValidity();
+      return;
+    }
+    const raw = $('ab').value.trim();
+    const openingBalance = raw ? parseAmount(raw) : 0;
+    if (!Number.isFinite(openingBalance)) {
+      $('ab').reportValidity();
+      return;
+    }
+    const fields = {
+      name,
+      kind: sel('ak').value as Account['kind'],
+      openingBalance: Math.round(openingBalance * 100) / 100,
+      openingDate: $('ad').value || today(),
+      institution: $('ai').value.trim(),
+    };
+    const existing = data.accounts.find((a) => a.id === accountEditId);
+    const account: Account = existing
+      ? { ...existing, ...fields }
+      : { id: newId(), currency: data.currency, archived: false, ...fields };
+    void update(() => repo.saveAccount(account), () => {
+      resetAccountForm();
+      return render();
+    });
+  }
+
+  function changeAccount(id: string, change: (a: Account) => Account): void {
+    const a = data.accounts.find((x) => x.id === id);
+    if (a) void update(() => repo.saveAccount(change(a)));
+  }
+
+  sel('ak').innerHTML = html.kindOptions();
+  resetAccountForm();
+  $('an').addEventListener('input', () => $('an').setCustomValidity(''));
+  $('asave').addEventListener('click', saveAccountForm);
+  $('acancel').addEventListener('click', resetAccountForm);
+  doc.addEventListener('click', (e) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-accf],[data-aedit],[data-aarch],[data-adel],[data-arestore]');
+    if (!el) return;
+    const d = el.dataset;
+    if (d.accf !== undefined) {
+      accountFilter = d.accf || null;
+      void render();
+    } else if (d.aedit) {
+      const a = data.accounts.find((x) => x.id === d.aedit);
+      if (a) editAccount(a);
+    } else if (d.aarch) {
+      const a = data.accounts.find((x) => x.id === d.aarch);
+      if (!a) return;
+      if (!a.archived && accountDeleteBlocker(a, data.accounts, []) === 'last') return toast(t('acc.blocked.last'));
+      changeAccount(a.id, (x) => ({ ...x, archived: !x.archived }));
+    } else if (d.adel) {
+      const a = data.accounts.find((x) => x.id === d.adel);
+      if (!a) return;
+      const blocker = accountDeleteBlocker(a, data.accounts, data.txs);
+      if (blocker) return toast(t(blocker === 'last' ? 'acc.blocked.last' : 'acc.blocked.transfers'));
+      if (!win.confirm(t('acc.confirmDelete', { name: a.name }))) return;
+      if (accountEditId === a.id) resetAccountForm();
+      changeAccount(a.id, (x) => ({ ...x, deletedAt: new Date().toISOString() }));
+    } else if (d.arestore) {
+      changeAccount(d.arestore, ({ deletedAt: _deletedAt, ...x }) => x);
+    }
   });
 
   // ---- start ----

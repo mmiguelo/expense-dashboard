@@ -1,4 +1,4 @@
-import type { CategoryRow, Change, HeatmapDay, Merchant, PeriodSummary, QuickPick, TrendBar } from '../analytics';
+import type { AccountBalance, CategoryRow, Change, HeatmapDay, Merchant, Overview, PeriodSummary, QuickPick, TrendBar } from '../analytics';
 import { categoryColor, expenseCategoryNames, INCOME_CATEGORY } from '../categories';
 import { formatDmy, parseIsoDate } from '../dates';
 import { escapeHtml as esc, formatEur as eur } from '../format';
@@ -142,6 +142,66 @@ export const recurringListHtml = (rules: RecurringExpense[], cats: Categories): 
         )
         .join('')
     : `<div class="mute">${t('rec.empty')}</div>`;
+
+// ---- Accounts ----
+
+export const ACCOUNT_KINDS: Account['kind'][] = ['checking', 'savings', 'restricted', 'credit'];
+
+/** Account kinds, each with a plain-language hint of what belongs there. */
+export const kindOptions = (): string =>
+  ACCOUNT_KINDS.map((k) => `<option value="${k}">${esc(t(`kind.${k}`))} — ${esc(t(`kind.${k}.hint`))}</option>`).join('');
+
+const accountMeta = (a: Account): string =>
+  [t(`kind.${a.kind}`), a.institution, a.archived ? t('acc.archived') : ''].filter(Boolean).map(esc).join(' · ');
+
+/**
+ * "Where your money is": net worth, then a total per kind of account (only when there is
+ * more than one kind), then one row per account (only when there is more than one).
+ * Rows filter the dashboard to that account; `filter` is the one shown, if any.
+ */
+export function overviewHtml(o: Overview, filter: string | null): string {
+  const kinds = Object.values(o.has).filter(Boolean).length;
+  const tiles: [boolean, number, 'ov.available' | 'ov.restricted' | 'ov.savings' | 'ov.creditDebt'][] = [
+    [o.has.checking, o.available, 'ov.available'],
+    [o.has.restricted, o.restricted, 'ov.restricted'],
+    [o.has.savings, o.savings, 'ov.savings'],
+    [o.has.credit, o.creditDebt, 'ov.creditDebt'],
+  ];
+  const stats = kinds > 1
+    ? `<div class="stats">${tiles.filter(([shown]) => shown).map(([, n, key]) => `<div><b class="${n < 0 ? 'up' : ''}">${eur(n)}</b><small>${t(key)}</small></div>`).join('')}</div>`
+    : '';
+  const rows = o.balances.length > 1
+    ? `<div class="acclist">${o.balances.map((b) => accountRowHtml(b, b.account.id === filter)).join('')}</div>` +
+      (filter
+        ? `<div class="mute accnote">${t('ov.showing', { name: esc(o.balances.find((b) => b.account.id === filter)?.account.name ?? '') })} <button type="button" class="linkbtn" data-accf="">${t('ov.showAll')}</button></div>`
+        : `<div class="mute accnote">${t('ov.filterHint')}</div>`)
+    : '';
+  return `<div class="mute">${t('ov.netWorth')}</div><div class="total ${o.netWorth < 0 ? 'up' : ''}">${eur(o.netWorth)}</div>${stats}${rows}`;
+}
+
+const accountRowHtml = ({ account: a, balance, warning }: AccountBalance, on: boolean): string =>
+  `<button type="button" class="accrow${on ? ' on' : ''}" data-accf="${on ? '' : esc(a.id)}" aria-pressed="${on}"><span><span class="accname">${esc(a.name)}</span><small>${accountMeta(a)}${warning ? ` · <span class="up">${t('ov.negative')}</span>` : ''}</small></span><b class="${balance < 0 ? 'up' : ''}">${eur(balance)}</b></button>`;
+
+/** Accounts in settings, with their balance and edit / archive / delete buttons. */
+export const accountSettingsHtml = (balances: AccountBalance[]): string =>
+  balances
+    .map(
+      ({ account: a, balance }) =>
+        `<div class="row" style="grid-template-columns:1fr auto auto"><div>${esc(a.name)}<div class="mute">${accountMeta(a)}</div></div><b class="${balance < 0 ? 'up' : ''}">${eur(balance)}</b><div><button class="x" data-aedit="${a.id}" aria-label="${esc(t('common.edit'))}">✎</button><button type="button" class="linkbtn" data-aarch="${a.id}">${t(a.archived ? 'acc.unarchive' : 'acc.archive')}</button><button class="x" data-adel="${a.id}" aria-label="${esc(t('common.delete'))}">✕</button></div></div>`,
+    )
+    .join('');
+
+/** Soft-deleted accounts, each with a restore button; nothing when there are none. */
+export const deletedAccountsHtml = (accounts: Account[]): string =>
+  accounts.length
+    ? `<h3 class="subhead">${t('acc.deletedTitle')}</h3>` +
+      accounts
+        .map(
+          (a) =>
+            `<div class="row" style="grid-template-columns:1fr auto"><div>${esc(a.name)}<div class="mute">${accountMeta(a)}</div></div><button type="button" data-arestore="${a.id}">${t('acc.restore')}</button></div>`,
+        )
+        .join('')
+    : '';
 
 // ---- Settings ----
 

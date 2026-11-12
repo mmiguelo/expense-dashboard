@@ -1,6 +1,6 @@
 begin;
 \ir _helpers.psql
-select plan(14);
+select plan(17);
 
 select pg_temp.new_user('alice@test.local') as alice \gset
 select pg_temp.new_user('bob@test.local') as bob \gset
@@ -33,6 +33,18 @@ select throws_ok($$insert into public.transactions (date, amount, type, category
 select throws_ok($$insert into public.transactions (date, amount, type, category, reimbursable) values ('2026-03-02', -1, 'expense', 'Lazer', true)$$, '23514', null, 'money back cannot be reimbursable');
 select throws_ok(format($$insert into public.transactions (date, amount, type, category, account_id) values ('2026-03-02', 1, 'expense', 'Lazer', %L)$$, :'bob_acc'),
   '23503', null, 'a transaction cannot use someone else''s account');
+
+select throws_ok(format($$update public.accounts set deleted_at = now() where id = %L$$, :'save'), '23514', null,
+  'an account with transfers cannot be soft-deleted');
+select lives_ok(format($$update public.accounts set archived = true where id = %L$$, :'save'), 'but it can be archived');
+reset role;
+select pg_temp.act_as(:'bob');
+set local role authenticated;
+select throws_ok(format($$update public.accounts set archived = true where id = %L$$, :'bob_acc'), '23514', null,
+  'the last open account cannot be archived');
+reset role;
+select pg_temp.act_as(:'alice');
+set local role authenticated;
 
 -- Import: accounts by their original id, and transactions that refer to them.
 select results_eq($$select (public.import_snapshot('{"accounts":[{"source_id":"x1","name":"Cartão refeição","kind":"restricted"}],

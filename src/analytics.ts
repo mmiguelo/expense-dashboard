@@ -129,6 +129,86 @@ export function summarize(txs: Transaction[], ref: string, mode: Mode, today: st
   };
 }
 
+/**
+ * An account's balance: its opening balance plus every transaction on or after its
+ * opening date (earlier ones are already in the opening balance). Income and money
+ * arriving by transfer add; spending and money leaving by transfer subtract; money back
+ * (a negative expense) adds; adjustments add their signed amount.
+ */
+export function accountBalance(account: Account, txs: Transaction[]): number {
+  let n = account.openingBalance;
+  for (const x of txs) {
+    if (x.del || x.date < account.openingDate) continue;
+    if (x.acc === account.id) n += x.type === 'i' || x.type === 'a' ? x.amount : -x.amount;
+    if (x.type === 't' && x.to === account.id) n += x.toAmt ?? x.amount;
+  }
+  return Math.round(n * 100) / 100;
+}
+
+export interface AccountBalance {
+  account: Account;
+  balance: number;
+  /** Below zero on an account that isn't a credit card: probably a missing entry. */
+  warning: boolean;
+}
+
+export interface Overview {
+  /** Every account that isn't soft-deleted, archived ones included, in order. */
+  balances: AccountBalance[];
+  /** Sum of all balances; credit cards count as (negative) debt. */
+  netWorth: number;
+  /** Current accounts: money free to spend. */
+  available: number;
+  /** Meal cards, benefits wallets: money only for some purchases. */
+  restricted: number;
+  savings: number;
+  /** What is owed on credit cards, as a positive number. */
+  creditDebt: number;
+  /** Which of those totals have any account, so empty ones can be hidden. */
+  has: Record<Account['kind'], boolean>;
+}
+
+export function overview(accounts: Account[], txs: Transaction[]): Overview {
+  const balances = accounts
+    .filter((a) => !a.deletedAt)
+    .map((account) => {
+      const balance = accountBalance(account, txs);
+      return { account, balance, warning: account.kind !== 'credit' && balance < 0 };
+    });
+  const sum = (kind: Account['kind']) => balances.filter((b) => b.account.kind === kind).reduce((s, b) => s + b.balance, 0);
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const has = { checking: false, savings: false, restricted: false, credit: false };
+  balances.forEach((b) => (has[b.account.kind] = true));
+  return {
+    balances,
+    netWorth: round(balances.reduce((s, b) => s + b.balance, 0)),
+    available: round(sum('checking')),
+    restricted: round(sum('restricted')),
+    savings: round(sum('savings')),
+    creditDebt: round(-sum('credit')),
+    has,
+  };
+}
+
+/** Transactions that touch an account: on it, or transfers into it. */
+export const onAccount = (txs: Transaction[], id: string): Transaction[] => txs.filter((x) => x.acc === id || x.to === id);
+
+/** Leave out transactions on soft-deleted accounts (and soft-deleted transactions). */
+export function visibleTransactions(txs: Transaction[], accounts: Account[]): Transaction[] {
+  const deleted = new Set(accounts.filter((a) => a.deletedAt).map((a) => a.id));
+  return txs.filter((x) => !x.del && !deleted.has(x.acc!) && !(x.to && deleted.has(x.to)));
+}
+
+/**
+ * Why an account can't be soft-deleted, or null if it can: it is the last open account,
+ * or transfers link it to other accounts (deleting it would change their balances).
+ */
+export function accountDeleteBlocker(account: Account, accounts: Account[], txs: Transaction[]): 'last' | 'transfers' | null {
+  if (!accounts.some((a) => a.id !== account.id && !a.deletedAt && !a.archived)) return 'last';
+  if (txs.some((x) => !x.del && x.type === 't' && (x.acc === account.id || x.to === account.id))) return 'transfers';
+  return null;
+}
+
 export interface TrendBar {
   /** Axis label; empty for unlabelled bars. */
   label: string;

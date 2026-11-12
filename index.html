@@ -78,6 +78,7 @@
 <label><span data-i18n="form.tags">Etiquetas / notas</span><input id="tags" placeholder="férias, partilhado" data-i18n-placeholder="form.tagsPlaceholder"></label>
 <button type="button" class="pr" id="sub" data-i18n="form.add">Adicionar</button><button type="button" id="cancel" hidden data-i18n="form.cancelEdit">Cancelar edição</button>
 </div><div class="chips" id="chips"></div></section>
+<section class="card" id="ov" hidden><h2 data-i18n="ov.title">Onde está o dinheiro</h2><div id="ovBody"></div></section>
 
 <div class="tabs"><div class="seg" id="modes"><button data-m="day" data-i18n="period.day">Dia</button><button data-m="month" class="on" data-i18n="period.month">Mês</button><button data-m="year" data-i18n="period.year">Ano</button></div>
 <div class="nav"><button id="prev" aria-label="Anterior" data-i18n-aria-label="period.previous">‹</button><span id="lbl"></span><button id="next" aria-label="Seguinte" data-i18n-aria-label="period.next">›</button><button id="today" data-i18n="period.today">Hoje</button></div></div>
@@ -101,6 +102,10 @@
 <p class="authmsg" id="pwMsg" role="status" aria-live="polite"></p></section>
 </div>
 <div id="viewSettings" hidden>
+<section class="card fold folded" id="secAccounts"><h2><button type="button" class="foldbtn" aria-expanded="false" aria-controls="secAccounts" data-i18n-title="common.expand" title="Mostrar mais"><span data-i18n="settings.accounts">Contas</span></button></h2>
+<div id="af" class="fg"><label><span data-i18n="acc.name">Nome</span><input id="an" maxlength="100" autocomplete="off"></label><label><span data-i18n="acc.kind">Tipo de conta</span><select id="ak"></select></label><label><span data-i18n="acc.opening">Saldo inicial</span><input id="ab" inputmode="decimal" placeholder="0,00"></label><label><span data-i18n="acc.openingDate">Na data</span><input id="ad" type="date"></label><label><span data-i18n="acc.institution">Banco ou entidade (opcional)</span><input id="ai" maxlength="100" autocomplete="off"></label><button type="button" class="pr" id="asave" data-i18n="acc.add">Adicionar conta</button><button type="button" id="acancel" hidden data-i18n="form.cancelEdit">Cancelar edição</button></div>
+<p class="mute" data-i18n="acc.help">O saldo inicial é o que a conta tinha nessa data.</p>
+<div id="alist"></div><div id="adeleted"></div></section>
 <section class="card fold folded" id="secCategories"><h2><button type="button" class="foldbtn" aria-expanded="false" aria-controls="secCategories" data-i18n-title="common.expand" title="Mostrar mais"><span data-i18n="settings.categories">Categorias</span></button></h2>
 <p class="mute" data-i18n="settings.categoriesHelp">Mudar o nome ou apagar uma categoria atualiza os seus movimentos, despesas fixas, regras e orçamentos.</p>
 <div id="catList"></div>
