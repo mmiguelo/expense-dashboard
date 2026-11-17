@@ -26,8 +26,6 @@ export function renderNotFoundPage(): string {
 <title>${esc(d['notFound.title'])} · ${esc(d['page.title'])}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,600&display=swap">
 <style>
 :root{--bg:#f2ebdf;--sf:#faf6ef;--ink:#3a2e29;--mute:#8a7c70;--line:#e3d8c7;--acc:#7a2e3c;color-scheme:light}
 *{box-sizing:border-box}

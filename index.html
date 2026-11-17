@@ -2,8 +2,6 @@
 <!-- Texts are in Portuguese here and come from src/i18n at startup (data-i18n* attributes), so other languages can be added there. -->
 <html lang="pt"><head><meta charset="utf-8"><title>Painel de despesas</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
 </head><body>
 <div class="loading" id="loading" role="status"><div class="spinner" id="spinner" aria-hidden="true"></div><p class="mute" data-i18n="page.loading">A carregar…</p></div>
 
@@ -19,6 +17,7 @@
 <p class="lnote" id="signedOutNote" role="status" hidden data-i18n="landing.signedOut">Sessão terminada. Até breve!</p>
 </div>
 <div class="lart" id="landingArt" aria-hidden="true"></div>
+<footer class="lfoot"><a href="./terms.html" data-i18n="legal.terms">Termos de utilização</a><a href="./privacy.html" data-i18n="legal.privacy">Privacidade</a><a href="mailto:expensedashboard.mail@gmail.com" data-i18n="legal.contact">Contacto</a></footer>
 <div class="lpanel" id="authPanel" hidden><section class="card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
 <button type="button" class="x lclose" id="authClose" aria-label="Fechar" data-i18n-aria-label="landing.close">✕</button>
 <h1 id="authTitle" data-i18n="page.title">Painel de despesas</h1>
@@ -29,6 +28,7 @@
 <label id="authPassLabel"><span data-i18n="auth.password">Palavra-passe</span><input type="password" id="authPass" autocomplete="current-password" minlength="8" required></label>
 <button type="submit" class="pr" id="authSubmit" data-i18n="auth.signin.submit">Iniciar sessão</button>
 </form>
+<p class="mute authterms" id="authTerms" hidden></p>
 <p class="authmsg" id="authMsg" role="status" aria-live="polite"></p>
 <p class="authlinks" id="authResendRow" hidden><button type="button" id="authResend" data-i18n="auth.resend">Reenviar email de confirmação</button></p>
 <p class="mute authlinks"><button type="button" class="link" id="authSwitch" data-i18n="auth.signin.switch">Criar conta</button><button type="button" class="link" id="authForgot" data-i18n="auth.forgot">Esqueceu-se da palavra-passe?</button></p>
@@ -104,6 +104,12 @@
 <section class="card"><h2 data-i18n="account.password">Palavra-passe</h2>
 <form id="pwForm" class="fg" novalidate><label><span data-i18n="recovery.newPassword">Nova palavra-passe</span><input type="password" id="pwNew" autocomplete="new-password" minlength="8"></label><label><span data-i18n="account.confirmPassword">Confirmar palavra-passe</span><input type="password" id="pwConfirm" autocomplete="new-password" minlength="8"></label><button type="submit" class="pr" data-i18n="account.changePassword">Alterar palavra-passe</button></form>
 <p class="authmsg" id="pwMsg" role="status" aria-live="polite"></p></section>
+<section class="card" id="deleteCard"><h2 data-i18n="delete.title">Apagar os meus dados</h2>
+<p class="mute" data-i18n="delete.intro">Apagar é definitivo: não há forma de recuperar. Se quiser guardar uma cópia, exporte primeiro em Definições → Cópia de segurança.</p>
+<div class="fg"><button type="button" id="delDataBtn" data-i18n="delete.dataButton">Apagar todos os meus dados</button><button type="button" class="danger" id="delAcctBtn" data-i18n="delete.accountButton">Apagar a minha conta</button></div>
+<form id="delForm" class="delform" novalidate hidden><p id="delWarn"></p>
+<div class="fg"><label><span data-i18n="delete.password">Palavra-passe, para confirmar</span><input type="password" id="delPass" autocomplete="current-password"></label><button type="submit" class="danger" id="delConfirm"></button><button type="button" id="delCancel" data-i18n="common.cancel">Cancelar</button></div></form>
+<p class="authmsg" id="delMsg" role="status" aria-live="polite"></p></section>
 </div>
 <div id="viewSettings" hidden>
 <section class="card fold folded" id="secAccounts"><h2><button type="button" class="foldbtn" aria-expanded="false" aria-controls="secAccounts" data-i18n-title="common.expand" title="Mostrar mais"><span data-i18n="settings.accounts">Contas</span></button></h2>
@@ -155,5 +161,6 @@
 <div id="roadmapList"></div>
 <div class="fg" style="margin-top:10px"><label><span data-i18n="admin.roadmapNew">Nova tarefa</span><input id="rmText" maxlength="500"></label><button type="button" id="rmAdd" data-i18n="common.add">Adicionar</button></div></section>
 </div>
+<footer class="appfoot"><a href="./terms.html" data-i18n="legal.terms">Termos de utilização</a><a href="./privacy.html" data-i18n="legal.privacy">Privacidade</a><a href="mailto:expensedashboard.mail@gmail.com" data-i18n="legal.contact">Contacto</a></footer>
 </main><div class="toast" id="toast"><span id="tm"></span><button id="undo" data-i18n="common.undo">Anular</button></div>
 <script type="module" src="/src/main.ts"></script></body></html>

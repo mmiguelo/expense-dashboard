@@ -1,6 +1,6 @@
 /* Beige paper, wine/mocha/olive/taupe accents, hairline rules, square-ish corners. Light only. */
 :root{--bg:#f2ebdf;--sf:#faf6ef;--ink:#3a2e29;--mute:#8a7c70;--line:#e3d8c7;--rule:#cbbca6;--acc:#7a2e3c;--acc-ink:#3a2e29;--acc-strong:#7a2e3c;--hover:#e6dac8;--mocha:#8b6b56;--olive:#6f7442;--ai:#fff;--bad:#a8423f;--warn:#b08642;--ok:#6f7442;
---serif:"Newsreader",Georgia,"Times New Roman",serif;--sans:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+--serif:"Newsreader Variable","Newsreader",Georgia,"Times New Roman",serif;--sans:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
 
 *{box-sizing:border-box}
@@ -104,6 +104,26 @@ details summary{cursor:pointer;font-weight:500}
 .lpanel .card{position:relative;width:100%;max-width:420px;margin:0;border-top:3px double var(--rule);padding:26px}
 .lpanel h1{margin-bottom:8px;padding-right:28px}.lpanel p{margin:0 0 16px}
 .lclose{position:absolute;top:10px;right:10px;font-size:16px}
+/* Terms, privacy and contact: along the bottom of the landing page and of the app. */
+.lfoot,.appfoot{display:flex;justify-content:center;flex-wrap:wrap;gap:6px 18px;font-size:12.5px}
+.lfoot{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,var(--bg) 45%)}
+.appfoot{margin-top:28px;padding-top:14px;border-top:1px solid var(--line)}
+.lfoot a,.appfoot a,.authterms a{color:var(--mute);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.lfoot a:hover,.appfoot a:hover,.authterms a:hover{color:var(--ink)}
+.authterms{font-size:12.5px;margin:12px 0 0!important}
+.delform{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.delform p{margin:0 0 10px}
+/* terms.html and privacy.html */
+.legalnav .lbrand{color:var(--ink);text-decoration:none}
+.btnlink{font-size:13px;font-weight:500;color:var(--ink);border:1px solid var(--rule);border-radius:2px;padding:7px 12px;text-decoration:none}
+.btnlink:hover{background:var(--hover)}
+.legal{max-width:760px;padding-top:8px}
+.legal .card{padding:28px clamp(18px,4vw,40px)}
+.legal h2{margin:26px 0 10px}
+.legal p,.legal li{line-height:1.6}
+.legal ul{padding-left:20px}.legal li{margin:4px 0}
+.legal a{color:var(--acc)}
+.legalnext{margin-top:28px;padding-top:14px;border-top:1px solid var(--line)}
 /* Loading: the landing wheel, small, in quick quarter turns. */
 .loading{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px}
 .loading[hidden]{display:none}

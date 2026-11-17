@@ -27,23 +27,25 @@ export const SAVED_LANGUAGE_JS = `(function () { try { return localStorage.getIt
 
 const SIGNED_OUT_KEY = 'signed-out';
 
-/** Remember, for the next page load in this tab only, that the user just logged out. */
-export function markSignedOut(): void {
+export type SignedOutReason = 'signedOut' | 'deleted';
+
+/** Remember, for the next page load in this tab only, that the user just logged out (or deleted their account). */
+export function markSignedOut(reason: SignedOutReason = 'signedOut'): void {
   try {
-    sessionStorage.setItem(SIGNED_OUT_KEY, '1');
+    sessionStorage.setItem(SIGNED_OUT_KEY, reason);
   } catch {
     // The "signed out" note just isn't shown.
   }
 }
 
-/** Whether the user just logged out in this tab; reading it clears it. */
-export function takeSignedOut(): boolean {
+/** Why the user just left, if they did in this tab; reading it clears it. */
+export function takeSignedOut(): SignedOutReason | null {
   try {
-    const was = sessionStorage.getItem(SIGNED_OUT_KEY) !== null;
+    const was = sessionStorage.getItem(SIGNED_OUT_KEY);
     sessionStorage.removeItem(SIGNED_OUT_KEY);
-    return was;
+    return was === null ? null : was === 'deleted' ? 'deleted' : 'signedOut';
   } catch {
-    return false;
+    return null;
   }
 }
 

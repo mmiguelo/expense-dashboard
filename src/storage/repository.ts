@@ -34,6 +34,10 @@ export interface Repository {
   updateDisplayName(name: string): Promise<void>;
   /** Refused once there are transactions: amounts aren't converted. */
   updateCurrency(code: string): Promise<void>;
+  /** Permanently delete every entry, account, category, rule, budget and recurring entry; the login stays and starts again from the defaults. */
+  deleteMyData(): Promise<void>;
+  /** Permanently delete the login and all its data. */
+  deleteMyAccount(): Promise<void>;
 
   /** Every account, including archived and soft-deleted ones, in the order added. */
   listAccounts(): Promise<Account[]>;

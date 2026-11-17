@@ -87,6 +87,7 @@ export function setupAuthScreen(doc: Document, supabase: SupabaseClient): (mode:
   };
   const offerResend = (show: boolean) => ($('authResendRow').hidden = !show);
   $('authCurrency').innerHTML = currencyOptions();
+  fillWithLinks($('authTerms'), t('auth.agree'), { terms: ['./terms.html', t('auth.agreeTerms')], privacy: ['./privacy.html', t('auth.agreePrivacy')] });
 
   const setMode = (m: AuthMode) => {
     mode = m;
@@ -96,6 +97,7 @@ export function setupAuthScreen(doc: Document, supabase: SupabaseClient): (mode:
     $('authSwitch').textContent = c.switchTo();
     $('authPassLabel').hidden = !c.password;
     $('authCurrencyLabel').hidden = m !== 'signup';
+    $('authTerms').hidden = m !== 'signup';
     $('authPass').autocomplete = m === 'signup' ? 'new-password' : 'current-password';
     $('authForgot').hidden = m !== 'signin';
     message('');
@@ -169,6 +171,28 @@ export function setupAuthScreen(doc: Document, supabase: SupabaseClient): (mode:
 
   setMode('signin');
   return setMode;
+}
+
+/**
+ * Set `el` to `text`, with each {name} placeholder made a link from `links` (opening in a
+ * new tab, so a half-filled form isn't lost).
+ */
+export function fillWithLinks(el: HTMLElement, text: string, links: Record<string, [href: string, label: string]>): void {
+  const doc = el.ownerDocument;
+  el.replaceChildren();
+  for (const part of text.split(/(\{\w+\})/)) {
+    const link = links[part.slice(1, -1)];
+    if (!link) {
+      el.append(part);
+      continue;
+    }
+    const a = doc.createElement('a');
+    a.href = link[0];
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = link[1];
+    el.append(a);
+  }
 }
 
 /** The form shown after following a password-reset link. */

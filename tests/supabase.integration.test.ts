@@ -375,6 +375,32 @@ describe.skipIf(!HAVE_DB)('against a real database', () => {
     });
   });
 
+  describe('deleting your own data', () => {
+    it('deletes every entry and starts afresh, keeping the login and other users\' data', async () => {
+      const [me, other] = await Promise.all([signUp('del'), signUp('keep')]);
+      const repo = repoOf(me);
+      await repo.saveAccount({ id: crypto.randomUUID(), name: 'Poupança', kind: 'savings', currency: 'EUR', openingBalance: 0, openingDate: '2026-01-01', institution: '', archived: false });
+      await repo.saveTransaction(tx());
+      await repo.saveTransaction(tx({ desc: 'Café' }));
+      await repoOf(other).saveTransaction(tx());
+      await repo.deleteMyData();
+      expect(await repo.listTransactions()).toEqual([]);
+      expect((await repo.listAccounts()).map((a) => a.name)).toEqual(['Conta principal']);
+      expect(Object.keys(await repo.getCategories()).length).toBeGreaterThan(5);
+      expect(await sql('select count(*)::int as n from public.transactions where user_id = $1', [me.id])).toEqual([{ n: 0 }]);
+      expect(await repoOf(other).listTransactions()).toHaveLength(1);
+    });
+
+    it('deletes the account: the login and every row go', async () => {
+      const me = await signUp('gone');
+      await repoOf(me).saveTransaction(tx());
+      await repoOf(me).deleteMyAccount();
+      expect(await sql('select count(*)::int as n from auth.users where id = $1', [me.id])).toEqual([{ n: 0 }]);
+      expect(await sql('select count(*)::int as n from public.transactions where user_id = $1', [me.id])).toEqual([{ n: 0 }]);
+      expect((await client().auth.signInWithPassword({ email: me.email, password: PASSWORD })).error).not.toBeNull();
+    });
+  });
+
   describe('deactivation', () => {
     it('locks a signed-in user out at once, keeps their data, and reactivation restores it', async () => {
       const [admin, user] = await Promise.all([signUpAdmin(), signUp('deact')]);

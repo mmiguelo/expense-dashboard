@@ -1,4 +1,5 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
+import './fonts.css';
 import './styles.css';
 import { readSupabaseConfig } from './config';
 import { initLang, t, tn, translateError, translatePage } from './i18n';
@@ -53,7 +54,8 @@ function main(): void {
   }
 
   const landing = setupLanding(document, setupAuthScreen(document, supabase));
-  if (takeSignedOut()) landing.showSignedOut();
+  const left = takeSignedOut();
+  if (left) landing.showSignedOut(left);
   let started: Promise<unknown> | null = null;
   // Arriving from a password-reset email.
   let recovering = /type=recovery/.test(location.hash);
@@ -135,6 +137,13 @@ async function startSignedIn(supabase: SupabaseClient, session: Session): Promis
     onNameChanged: (name) => showAccount({ ...profile, displayName: name }),
     hasEntries: app.hasEntries,
     onCurrencyChanged: () => location.reload(),
+    onDataDeleted: () => location.reload(),
+    onAccountDeleted: async () => {
+      // The login is gone; drop the local session too.
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      markSignedOut('deleted');
+      location.reload();
+    },
   });
 
   // Coming back to the tab: pick up changes from other devices, and deactivation.

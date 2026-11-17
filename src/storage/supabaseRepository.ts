@@ -365,6 +365,14 @@ export class SupabaseRepository implements Repository {
     if (!data?.length) throw new Error(t('admin.err.notAllowed'));
   }
 
+  async deleteMyData(): Promise<void> {
+    check(await this.db.rpc('delete_my_data'));
+  }
+
+  async deleteMyAccount(): Promise<void> {
+    check(await this.db.rpc('delete_my_account'));
+  }
+
   async updateDisplayName(name: string): Promise<void> {
     const { data, error } = await this.db.from('profiles').update({ display_name: name }).eq('id', this.userId).select('id');
     if (error) throw toError(error);

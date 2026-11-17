@@ -5,6 +5,10 @@ import type * as NotFoundPage from './src/notFoundPage.ts';
 export default defineConfig({
   // Relative asset paths, so the build works under https://<user>.github.io/<repo>/
   base: './',
+  build: {
+    // The app, and the Terms of Use and Privacy Policy pages.
+    rollupOptions: { input: { main: 'index.html', terms: 'terms.html', privacy: 'privacy.html' } },
+  },
   plugins: [
     {
       // dist/404.html: GitHub Pages shows it for any missing path. Texts from src/i18n.

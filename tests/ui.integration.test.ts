@@ -244,6 +244,58 @@ describe.skipIf(!HAVE_DB)('the page, signed out and signed in', () => {
     expect((await db.auth.signInWithPassword({ email, password: 'another-password' })).error).toBeNull();
   });
 
+  it('my account: deleting all data starts afresh; deleting the account removes the login', async () => {
+    const email = newEmail();
+    await openPage();
+    await signUpThroughForm(email);
+    type('desc', 'To be erased');
+    type('amt', '9');
+    $('sub').click();
+    await until(() => $('list').textContent!.includes('To be erased'), 'the expense');
+
+    (document.querySelector('#acct [data-view="account"]') as HTMLElement).click();
+    expect(visible('delForm')).toBe(false);
+    $('delDataBtn').click();
+    expect(visible('delForm')).toBe(true);
+    expect($('delWarn').textContent).toContain('todos os movimentos');
+    $<HTMLFormElement>('delForm').requestSubmit();
+    expect($('delMsg').textContent).toBe('Escreva a sua palavra-passe para confirmar.');
+    type('delPass', 'not-my-password');
+    $<HTMLFormElement>('delForm').requestSubmit();
+    await until(() => $('delMsg').textContent === 'A palavra-passe não está certa.', 'wrong password');
+    type('delPass', PASSWORD);
+    $<HTMLFormElement>('delForm').requestSubmit();
+    const repo = await accountRepo(email);
+    await until(() => !$<HTMLButtonElement>('delConfirm').disabled, 'data deleted');
+    expect(await repo.listTransactions()).toEqual([]);
+    expect((await repo.listAccounts()).map((a) => a.name)).toEqual(['Conta principal']);
+
+    $('delAcctBtn').click();
+    expect($('delConfirm').textContent).toBe('Apagar a conta');
+    type('delPass', PASSWORD);
+    $<HTMLFormElement>('delForm').requestSubmit();
+    await until(() => !Object.keys(localStorage).some((k) => k.startsWith('sb-')), 'signed out');
+    await openPage(); // the reload
+    expect(visible('auth')).toBe(true);
+    expect($('signedOutNote').textContent).toBe('A sua conta e todos os dados foram apagados.');
+    const db = createClient(URL!, KEY!, { auth: { persistSession: false } });
+    expect((await db.auth.signInWithPassword({ email, password: PASSWORD })).error).not.toBeNull();
+  });
+
+  it('sign-up shows the terms and privacy links; the landing page and the app link to them', async () => {
+    await openPage();
+    expect([...document.querySelectorAll('.lfoot a')].map((a) => a.getAttribute('href'))).toEqual(['./terms.html', './privacy.html', 'mailto:expensedashboard.mail@gmail.com']);
+    (document.querySelector('[data-auth-open="signup"]') as HTMLElement).click();
+    expect(visible('authTerms')).toBe(true);
+    expect([...$('authTerms').querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['Termos de Utilização', './terms.html'],
+      ['Política de Privacidade', './privacy.html'],
+    ]);
+    $('authSwitch').click();
+    expect(visible('authTerms')).toBe(false);
+    expect(document.querySelectorAll('#app .appfoot a')).toHaveLength(3);
+  });
+
   it('landing page: the language picker reopens the page in the chosen language', async () => {
     await openPage();
     const select = $<HTMLSelectElement>('landingLang');

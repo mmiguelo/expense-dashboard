@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import type { SignedOutReason } from '../storage/preferences';
 
 // The signed-out landing page: a large drawn donut chart rising from the bottom of the
 // screen, turning in steps, with a ring of category names around it. The sign-in form
@@ -78,7 +79,7 @@ ${ring}
  * they name (`setMode` comes from setupAuthScreen). Returns `showSignedOut()` for the
  * note shown after logging out.
  */
-export function setupLanding(doc: Document, setMode: (mode: Mode) => void): { showSignedOut(): void } {
+export function setupLanding(doc: Document, setMode: (mode: Mode) => void): { showSignedOut(reason?: SignedOutReason): void } {
   const $ = (id: string) => doc.getElementById(id)!;
   const page = $('auth');
   const panel = $('authPanel');
@@ -111,8 +112,9 @@ export function setupLanding(doc: Document, setMode: (mode: Mode) => void): { sh
   });
 
   return {
-    showSignedOut: () => {
+    showSignedOut: (reason = 'signedOut') => {
       const note = $('signedOutNote');
+      note.textContent = t(reason === 'deleted' ? 'landing.accountDeleted' : 'landing.signedOut');
       note.hidden = false;
       // Fade out after a few seconds; it doesn't take up any room meanwhile.
       const win = doc.defaultView!;
